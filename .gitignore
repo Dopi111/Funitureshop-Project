@@ -1,0 +1,28 @@
+# Visual Studio / C#
+.vs/
+.vscode/
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.dbmdl
+*.slnx.user
+
+# Node / React
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS / Miscellaneous
+.DS_Store
+Thumbs.db
+desktop.ini
