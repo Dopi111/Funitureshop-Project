@@ -1,0 +1,21 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.swp
+
+## Node / React
+FurnitureShop.Client/node_modules/
+FurnitureShop.Client/dist/
+FurnitureShop.Client/.env.local
+FurnitureShop.Client/.env.production
+
+## Misc
+*.log
+.DS_Store
+Thumbs.db
+
+## Secrets - keep out of repo
+FurnitureShop.API/appsettings.Development.json
