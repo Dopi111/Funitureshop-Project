@@ -4,8 +4,11 @@ namespace FurnitureShop.API.Models
 {
     public enum UserRole
     {
-        Customer,
-        Admin
+        Customer = 0,
+        Admin = 1,
+        SuperAdmin = 2,
+        OrderManager = 3,
+        InventoryManager = 4
     }
 
     public class User

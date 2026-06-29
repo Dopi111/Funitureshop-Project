@@ -1,680 +1,271 @@
 // src/pages/admin/AdminUsers.jsx
 import React, { useState, useEffect } from 'react';
+import AdminLayout from '../../components/admin/AdminLayout';
 import { useAuth } from '../../context/AuthContext';
-import AdminSidebar from '../../components/admin/AdminSidebar';
-import '../../index.css';
+import {
+  PageHeader, Btn, Filters, SearchInput, FilterSelect,
+  TableCard, Table, Thead, Th, Td, Badge, ActionBtn, Pagination,
+  TableState, Modal, FormBody, FormRow, FormGroup, FormInput,
+  FormSelect, FormCheckbox, FormActions, FormError,
+} from '../../components/admin/ui';
 
 const AdminUsers = () => {
-    const { user } = useAuth();
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [roleFilter, setRoleFilter] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [showModal, setShowModal] = useState(false);
-    const [modalMode, setModalMode] = useState('add');
-    const [selectedUser, setSelectedUser] = useState(null);
-    const [formData, setFormData] = useState({
-        username: '',
-        email: '',
-        password: '',
-        fullName: '',
-        phoneNumber: '',
-        address: '',
-        city: '',
-        district: '',
-        ward: '',
-        role: 0,
-        isActive: true
-    });
-    const [formError, setFormError] = useState('');
-    const [formLoading, setFormLoading] = useState(false);
-    const pageSize = 10;
+  const { user } = useAuth();
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [showModal, setShowModal] = useState(false);
+  const [modalMode, setModalMode] = useState('add');
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [formData, setFormData] = useState({ username: '', email: '', password: '', fullName: '', phoneNumber: '', address: '', city: '', district: '', ward: '', role: 0, isActive: true });
+  const [formError, setFormError] = useState('');
+  const [formLoading, setFormLoading] = useState(false);
+  const pageSize = 10;
 
-    const roleLabels = {
-        0: { label: 'Khách hàng', class: 'customer' },
-        1: { label: 'Admin', class: 'admin' }
-    };
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams({ page: currentPage, pageSize });
+      if (roleFilter !== '') params.append('role', roleFilter);
+      if (statusFilter !== '') params.append('isActive', statusFilter);
+      const r = await fetch(`/api/auth/users?${params}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` } });
+      const data = await r.json();
+      let list = data.data || data || [];
+      if (roleFilter !== '') list = list.filter(u => String(u.role) === String(roleFilter));
+      if (statusFilter !== '') list = list.filter(u => String(u.isActive) === String(statusFilter));
+      if (searchTerm) list = list.filter(u =>
+        u.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.phoneNumber?.includes(searchTerm)
+      );
+      setUsers(list); setTotalPages(data.totalPages || 1); setError(null);
+    } catch { setError('Không thể tải danh sách người dùng'); }
+    finally { setLoading(false); }
+  };
 
-    // Fetch users
-    const fetchUsers = async () => {
-        try {
-            setLoading(true);
-            const params = new URLSearchParams({
-                page: currentPage,
-                pageSize: pageSize
-            });
+  useEffect(() => { fetchUsers(); }, [currentPage, roleFilter, statusFilter]);
+  useEffect(() => {
+    const t = setTimeout(() => currentPage === 1 ? fetchUsers() : setCurrentPage(1), 500);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
-            if (roleFilter !== '') {
-                params.append('role', roleFilter);
-            }
-            if (statusFilter !== '') {
-                params.append('isActive', statusFilter);
-            }
+  const formatDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
 
-            const response = await fetch(`/api/auth/users?${params}`, {
-                headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-                }
-            });
-            const data = await response.json();
+  const openAddModal = () => { setModalMode('add'); setSelectedUser(null); setFormData({ username:'',email:'',password:'',fullName:'',phoneNumber:'',address:'',city:'',district:'',ward:'',role:0,isActive:true }); setFormError(''); setShowModal(true); };
+  const openEditModal = (u) => { setModalMode('edit'); setSelectedUser(u); setFormData({ username:u.username||'',email:u.email||'',password:'',fullName:u.fullName||'',phoneNumber:u.phoneNumber||'',address:u.address||'',city:u.city||'',district:u.district||'',ward:u.ward||'',role:u.role??0,isActive:u.isActive??true }); setFormError(''); setShowModal(true); };
+  const closeModal = () => { setShowModal(false); setSelectedUser(null); setFormError(''); };
+  const handleChange = (e) => { const {name,value,type,checked} = e.target; setFormData(p => ({...p,[name]:type==='checkbox'?checked:value})); };
 
-            let filteredUsers = data.data || data || [];
+  const handleSubmit = async (e) => {
+    e.preventDefault(); setFormLoading(true); setFormError('');
+    const token = localStorage.getItem('authToken');
+    try {
+      const payload = { username:formData.username, email:formData.email, fullName:formData.fullName, phoneNumber:formData.phoneNumber, address:formData.address, city:formData.city, district:formData.district, ward:formData.ward, role:parseInt(formData.role), isActive:formData.isActive };
+      if (formData.password) payload.password = formData.password;
+      if (modalMode === 'add' && !formData.password) throw new Error('Vui lòng nhập mật khẩu cho tài khoản mới');
+      const url = modalMode === 'add' ? '/api/auth/users' : `/api/auth/users/${selectedUser.userId}`;
+      const r = await fetch(url, { method: modalMode === 'add' ? 'POST' : 'PUT', headers: { 'Content-Type':'application/json','Authorization':`Bearer ${token}` }, body: JSON.stringify(modalMode === 'edit' ? {...payload,userId:selectedUser.userId} : payload) });
+      const ct = r.headers.get('content-type');
+      const data = ct?.includes('application/json') ? JSON.parse(await r.text()||'null') : null;
+      if (!r.ok) throw new Error(data?.message || `Lỗi ${r.status}`);
+      await fetchUsers(); closeModal();
+    } catch (err) { setFormError(err.message); }
+    finally { setFormLoading(false); }
+  };
 
-            // Client-side search filter
-            if (searchTerm) {
-                filteredUsers = filteredUsers.filter(u =>
-                    u.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    u.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    u.phoneNumber?.includes(searchTerm)
-                );
-            }
+  const handleToggleStatus = async (userId, current) => {
+    if (userId === user?.userId) { alert('Bạn không thể khóa tài khoản của chính mình!'); return; }
+    if (!window.confirm(`Bạn có chắc chắn muốn ${current ? 'vô hiệu hóa' : 'kích hoạt'} tài khoản này?`)) return;
+    const r = await fetch(`/api/auth/users/${userId}/toggle-status`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` } });
+    if (!r.ok) { alert('Không thể thay đổi trạng thái'); return; }
+    await fetchUsers();
+  };
 
-            setUsers(filteredUsers);
-            setTotalPages(data.totalPages || 1);
-            setError(null);
-        } catch (err) {
-            console.error('Error fetching users:', err);
-            setError('Không thể tải danh sách người dùng');
-        } finally {
-            setLoading(false);
-        }
-    };
+  const handleDelete = async (userId) => {
+    if (userId === user?.userId) { alert('Bạn không thể xóa tài khoản của chính mình!'); return; }
+    if (!window.confirm('Bạn có chắc chắn muốn xóa người dùng này?')) return;
+    const r = await fetch(`/api/auth/users/${userId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}` } });
+    if (!r.ok) { alert('Không thể xóa người dùng'); return; }
+    await fetchUsers();
+  };
 
-    useEffect(() => {
-        fetchUsers();
-    }, [currentPage, roleFilter, statusFilter]);
+  const handleResetPassword = async (userId) => {
+    const pw = window.prompt('Nhập mật khẩu mới:');
+    if (!pw) return;
+    if (pw.length < 6) { alert('Mật khẩu phải có ít nhất 6 ký tự'); return; }
+    const r = await fetch(`/api/auth/users/${userId}/reset-password`, { method: 'POST', headers: { 'Content-Type':'application/json','Authorization':`Bearer ${localStorage.getItem('authToken')}` }, body: JSON.stringify({ newPassword: pw }) });
+    alert(r.ok ? 'Đặt lại mật khẩu thành công' : 'Không thể đặt lại mật khẩu');
+  };
 
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            if (currentPage === 1) {
-                fetchUsers();
-            } else {
-                setCurrentPage(1);
-            }
-        }, 500);
+  const totalUsersCount = users.length;
+  const customerCount = users.filter(u => u.role === 0 || u.role === '0' || u.role === 'Customer').length;
+  const adminCount = users.filter(u => u.role !== 0 && u.role !== '0' && u.role !== 'Customer').length;
 
-        return () => clearTimeout(timer);
-    }, [searchTerm]);
+  return (
+    <AdminLayout>
+      <PageHeader 
+        title="Khách hàng Thành viên" 
+        subtitle="Quản lý danh sách tài khoản, phân quyền hồ sơ và thành viên mua sắm"
+        breadcrumb={['Admin', 'Thương mại', 'Khách hàng thành viên']}
+      >
+        <Btn onClick={openAddModal}>+ Thêm người dùng</Btn>
+      </PageHeader>
 
-    const handleLogout = () => {
-        logout();
-        navigate('/admin/login');
-    };
-
-    const formatDate = (dateString) => {
-        if (!dateString) return '-';
-        return new Date(dateString).toLocaleDateString('vi-VN', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
-
-    const openAddModal = () => {
-        setModalMode('add');
-        setSelectedUser(null);
-        setFormData({
-            username: '',
-            email: '',
-            password: '',
-            fullName: '',
-            phoneNumber: '',
-            address: '',
-            city: '',
-            district: '',
-            ward: '',
-            role: 0,
-            isActive: true
-        });
-        setFormError('');
-        setShowModal(true);
-    };
-
-    const openEditModal = (userData) => {
-        setModalMode('edit');
-        setSelectedUser(userData);
-        setFormData({
-            username: userData.username || '',
-            email: userData.email || '',
-            password: '', // Don't populate password for security
-            fullName: userData.fullName || '',
-            phoneNumber: userData.phoneNumber || '',
-            address: userData.address || '',
-            city: userData.city || '',
-            district: userData.district || '',
-            ward: userData.ward || '',
-            role: userData.role ?? 0,
-            isActive: userData.isActive ?? true
-        });
-        setFormError('');
-        setShowModal(true);
-    };
-
-    const closeModal = () => {
-        setShowModal(false);
-        setSelectedUser(null);
-        setFormError('');
-    };
-
-    const handleFormChange = (e) => {
-        const { name, value, type, checked } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: type === 'checkbox' ? checked : value
-        }));
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setFormLoading(true);
-        setFormError('');
-
-        const token = localStorage.getItem('authToken');
-
-        try {
-            const userData = {
-                username: formData.username,
-                email: formData.email,
-                fullName: formData.fullName,
-                phoneNumber: formData.phoneNumber,
-                address: formData.address,
-                city: formData.city,
-                district: formData.district,
-                ward: formData.ward,
-                role: parseInt(formData.role),
-                isActive: formData.isActive
-            };
-
-            // Only include password if provided
-            if (formData.password) {
-                userData.password = formData.password;
-            }
-
-            let response;
-            if (modalMode === 'add') {
-                if (!formData.password) {
-                    throw new Error('Vui lòng nhập mật khẩu cho tài khoản mới');
-                }
-                response = await fetch('/api/auth/users', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify(userData)
-                });
-            } else {
-                response = await fetch(`/api/auth/users/${selectedUser.userId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        ...userData,
-                        userId: selectedUser.userId
-                    })
-                });
-            }
-
-            const contentType = response.headers.get('content-type');
-            let data = null;
-
-            if (contentType && contentType.includes('application/json')) {
-                const text = await response.text();
-                if (text) {
-                    data = JSON.parse(text);
-                }
-            }
-
-            if (!response.ok) {
-                throw new Error(data?.message || `Lỗi ${response.status}: Có lỗi xảy ra`);
-            }
-
-            await fetchUsers();
-            closeModal();
-        } catch (err) {
-            setFormError(err.message);
-        } finally {
-            setFormLoading(false);
-        }
-    };
-
-    const handleToggleStatus = async (userId, currentStatus) => {
-        // Prevent admin from locking their own account
-        if (userId === user?.userId) {
-            alert('Bạn không thể khóa tài khoản của chính mình!');
-            return;
-        }
-
-        const action = currentStatus ? 'vô hiệu hóa' : 'kích hoạt';
-        if (!window.confirm(`Bạn có chắc chắn muốn ${action} tài khoản này?`)) {
-            return;
-        }
-
-        const token = localStorage.getItem('authToken');
-
-        try {
-            const response = await fetch(`/api/auth/users/${userId}/toggle-status`, {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error(`Không thể ${action} tài khoản`);
-            }
-
-            await fetchUsers();
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    const handleDelete = async (userId) => {
-        // Prevent admin from deleting their own account
-        if (userId === user?.userId) {
-            alert('Bạn không thể xóa tài khoản của chính mình!');
-            return;
-        }
-
-        if (!window.confirm('Bạn có chắc chắn muốn xóa người dùng này? Hành động này không thể hoàn tác.')) {
-            return;
-        }
-
-        const token = localStorage.getItem('authToken');
-
-        try {
-            const response = await fetch(`/api/auth/users/${userId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Không thể xóa người dùng');
-            }
-
-            await fetchUsers();
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    const handleResetPassword = async (userId) => {
-        const newPassword = window.prompt('Nhập mật khẩu mới (để trống để hủy):');
-        if (!newPassword) return;
-
-        if (newPassword.length < 6) {
-            alert('Mật khẩu phải có ít nhất 6 ký tự');
-            return;
-        }
-
-        const token = localStorage.getItem('authToken');
-
-        try {
-            const response = await fetch(`/api/auth/users/${userId}/reset-password`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ newPassword })
-            });
-
-            if (!response.ok) {
-                throw new Error('Không thể đặt lại mật khẩu');
-            }
-
-            alert('Đặt lại mật khẩu thành công');
-        } catch (err) {
-            alert(err.message);
-        }
-    };
-
-    return (
-        <div className="admin-layout">
-            <AdminSidebar />
-
-            {/* Main Content */}
-            <main className="admin-main">
-                <div className="admin-header">
-                    <h1>Quản lý người dùng</h1>
-                    <button onClick={openAddModal} className="btn btn-primary">
-                        + Thêm người dùng
-                    </button>
-                </div>
-
-                {/* Filters */}
-                <div className="admin-filters">
-                    <div className="admin-search">
-                        <input
-                            type="text"
-                            placeholder="Tìm kiếm theo tên, email, SĐT..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    <div className="admin-filter-group">
-                        <select
-                            value={roleFilter}
-                            onChange={(e) => setRoleFilter(e.target.value)}
-                        >
-                            <option value="">Tất cả vai trò</option>
-                            <option value="0">Khách hàng</option>
-                            <option value="1">Admin</option>
-                        </select>
-                    </div>
-                    <div className="admin-filter-group">
-                        <select
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                        >
-                            <option value="">Tất cả trạng thái</option>
-                            <option value="true">Hoạt động</option>
-                            <option value="false">Đã khóa</option>
-                        </select>
-                    </div>
-                </div>
-
-                {/* Users Table */}
-                <div className="admin-table-container">
-                    {loading ? (
-                        <div className="admin-loading">
-                            <p>Đang tải dữ liệu...</p>
-                        </div>
-                    ) : error ? (
-                        <div className="admin-error">
-                            <p>{error}</p>
-                        </div>
-                    ) : (
-                        <>
-                            <table className="admin-table">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Tên đăng nhập</th>
-                                        <th>Họ tên</th>
-                                        <th>Email</th>
-                                        <th>SĐT</th>
-                                        <th>Vai trò</th>
-                                        <th>Trạng thái</th>
-                                        <th>Đăng nhập gần nhất</th>
-                                        <th>Hành động</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {users.length === 0 ? (
-                                        <tr>
-                                            <td colSpan="9" className="text-center">
-                                                Không có người dùng nào
-                                            </td>
-                                        </tr>
-                                    ) : (
-                                        users.map(userData => (
-                                            <tr key={userData.userId}>
-                                                <td>{userData.userId}</td>
-                                                <td>
-                                                    <span className="username">{userData.username}</span>
-                                                </td>
-                                                <td>{userData.fullName}</td>
-                                                <td>{userData.email}</td>
-                                                <td>{userData.phoneNumber || '-'}</td>
-                                                <td>
-                                                    <span className={`role-badge ${roleLabels[userData.role]?.class || ''}`}>
-                                                        {roleLabels[userData.role]?.label || 'N/A'}
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <span className={`status-badge ${userData.isActive ? 'active' : 'inactive'}`}>
-                                                        {userData.isActive ? 'Hoạt động' : 'Đã khóa'}
-                                                    </span>
-                                                </td>
-                                                <td>{formatDate(userData.lastLoginAt)}</td>
-                                                <td>
-                                                    <div className="action-buttons">
-                                                        <button
-                                                            onClick={() => openEditModal(userData)}
-                                                            className="btn-action btn-edit"
-                                                            title="Sửa"
-                                                        >
-                                                            ✏️
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleResetPassword(userData.userId)}
-                                                            className="btn-action btn-reset"
-                                                            title="Đặt lại mật khẩu"
-                                                        >
-                                                            🔑
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleToggleStatus(userData.userId, userData.isActive)}
-                                                            className={`btn-action ${userData.isActive ? 'btn-lock' : 'btn-unlock'}`}
-                                                            title={userData.isActive ? 'Khóa tài khoản' : 'Mở khóa'}
-                                                            disabled={userData.userId === user?.userId}
-                                                        >
-                                                            {userData.isActive ? '🔒' : '🔓'}
-                                                        </button>
-                                                        {userData.userId !== user?.userId && userData.role !== 1 && (
-                                                            <button
-                                                                onClick={() => handleDelete(userData.userId)}
-                                                                className="btn-action btn-delete"
-                                                                title="Xóa"
-                                                            >
-                                                                🗑️
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-
-                            {/* Pagination */}
-                            {totalPages > 1 && (
-                                <div className="admin-pagination">
-                                    <button
-                                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                        disabled={currentPage === 1}
-                                        className="pagination-btn"
-                                    >
-                                        ← Trước
-                                    </button>
-                                    <span className="pagination-info">
-                                        Trang {currentPage} / {totalPages}
-                                    </span>
-                                    <button
-                                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                        disabled={currentPage === totalPages}
-                                        className="pagination-btn"
-                                    >
-                                        Sau →
-                                    </button>
-                                </div>
-                            )}
-                        </>
-                    )}
-                </div>
-            </main>
-
-            {/* Add/Edit Modal */}
-            {showModal && (
-                <div className="modal-overlay" onClick={closeModal}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>{modalMode === 'add' ? 'Thêm người dùng mới' : 'Chỉnh sửa người dùng'}</h2>
-                            <button onClick={closeModal} className="modal-close">&times;</button>
-                        </div>
-
-                        {formError && (
-                            <div className="auth-error" style={{ margin: '0 1.5rem' }}>
-                                <span>⚠️</span> {formError}
-                            </div>
-                        )}
-
-                        <form onSubmit={handleSubmit} className="modal-form">
-                            <div className="form-row-2">
-                                <div className="form-group">
-                                    <label htmlFor="username">Tên đăng nhập *</label>
-                                    <input
-                                        type="text"
-                                        id="username"
-                                        name="username"
-                                        value={formData.username}
-                                        onChange={handleFormChange}
-                                        required
-                                        disabled={modalMode === 'edit'}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="email">Email *</label>
-                                    <input
-                                        type="email"
-                                        id="email"
-                                        name="email"
-                                        value={formData.email}
-                                        onChange={handleFormChange}
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="form-row-2">
-                                <div className="form-group">
-                                    <label htmlFor="fullName">Họ và tên *</label>
-                                    <input
-                                        type="text"
-                                        id="fullName"
-                                        name="fullName"
-                                        value={formData.fullName}
-                                        onChange={handleFormChange}
-                                        required
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="phoneNumber">Số điện thoại</label>
-                                    <input
-                                        type="tel"
-                                        id="phoneNumber"
-                                        name="phoneNumber"
-                                        value={formData.phoneNumber}
-                                        onChange={handleFormChange}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="form-group">
-                                <label htmlFor="password">
-                                    {modalMode === 'add' ? 'Mật khẩu *' : 'Mật khẩu mới (để trống nếu không đổi)'}
-                                </label>
-                                <input
-                                    type="password"
-                                    id="password"
-                                    name="password"
-                                    value={formData.password}
-                                    onChange={handleFormChange}
-                                    required={modalMode === 'add'}
-                                    minLength={6}
-                                    placeholder={modalMode === 'edit' ? '••••••••' : ''}
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label htmlFor="address">Địa chỉ</label>
-                                <input
-                                    type="text"
-                                    id="address"
-                                    name="address"
-                                    value={formData.address}
-                                    onChange={handleFormChange}
-                                />
-                            </div>
-
-                            <div className="form-row-3">
-                                <div className="form-group">
-                                    <label htmlFor="city">Tỉnh/Thành phố</label>
-                                    <input
-                                        type="text"
-                                        id="city"
-                                        name="city"
-                                        value={formData.city}
-                                        onChange={handleFormChange}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="district">Quận/Huyện</label>
-                                    <input
-                                        type="text"
-                                        id="district"
-                                        name="district"
-                                        value={formData.district}
-                                        onChange={handleFormChange}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="ward">Phường/Xã</label>
-                                    <input
-                                        type="text"
-                                        id="ward"
-                                        name="ward"
-                                        value={formData.ward}
-                                        onChange={handleFormChange}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="form-row-2">
-                                <div className="form-group">
-                                    <label htmlFor="role">Vai trò *</label>
-                                    <select
-                                        id="role"
-                                        name="role"
-                                        value={formData.role}
-                                        onChange={handleFormChange}
-                                        required
-                                    >
-                                        <option value={0}>Khách hàng</option>
-                                        <option value={1}>Admin</option>
-                                    </select>
-                                </div>
-                                <div className="form-group checkbox-group">
-                                    <label className="checkbox-label">
-                                        <input
-                                            type="checkbox"
-                                            name="isActive"
-                                            checked={formData.isActive}
-                                            onChange={handleFormChange}
-                                        />
-                                        <span>Tài khoản hoạt động</span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div className="modal-actions">
-                                <button type="button" onClick={closeModal} className="btn btn-outline">
-                                    Hủy
-                                </button>
-                                <button type="submit" className="btn btn-primary" disabled={formLoading}>
-                                    {formLoading ? 'Đang xử lý...' : modalMode === 'add' ? 'Thêm người dùng' : 'Cập nhật'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+      {/* KPI Bento Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white border border-zinc-200/80 rounded-2xl p-5 shadow-2xs flex items-center justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-wider font-bold text-blue-600 mb-1">Tổng Tài Khoản</div>
+            <div className="text-2xl sm:text-3xl font-light text-[#0D0D0D] tracking-tight">{totalUsersCount} <span className="text-xs font-normal text-zinc-400">người dùng</span></div>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl font-bold border border-blue-100">
+            👥
+          </div>
         </div>
-    );
+
+        <div className="bg-white border border-zinc-200/80 rounded-2xl p-5 shadow-2xs flex items-center justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-wider font-bold text-emerald-600 mb-1">Khách Hàng Thành Viên</div>
+            <div className="text-2xl sm:text-3xl font-light text-[#0D0D0D] tracking-tight">{customerCount} <span className="text-xs font-normal text-zinc-400">khách hàng</span></div>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl font-bold border border-emerald-100">
+            🛍️
+          </div>
+        </div>
+
+        <div className="bg-white border border-zinc-200/80 rounded-2xl p-5 shadow-2xs flex items-center justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-wider font-bold text-purple-600 mb-1">Nhân Viên & Quản Trị</div>
+            <div className="text-2xl sm:text-3xl font-light text-[#0D0D0D] tracking-tight">{adminCount} <span className="text-xs font-normal text-zinc-400">nhân sự</span></div>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl font-bold border border-purple-100">
+            🛡️
+          </div>
+        </div>
+      </div>
+
+      <Filters>
+        <SearchInput value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Tìm kiếm theo tên, email, SĐT..." />
+        <FilterSelect value={roleFilter} onChange={e => setRoleFilter(e.target.value)}>
+          <option value="">Tất cả vai trò</option>
+          <option value="0">Khách hàng</option>
+          <option value="1">Admin</option>
+          <option value="2">SuperAdmin</option>
+          <option value="3">Quản lý Đơn hàng</option>
+          <option value="4">Quản lý Kho</option>
+        </FilterSelect>
+        <FilterSelect value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+          <option value="">Tất cả trạng thái</option>
+          <option value="true">Hoạt động</option>
+          <option value="false">Đã khóa</option>
+        </FilterSelect>
+      </Filters>
+
+      <TableCard>
+        <Table>
+          <Thead>
+            <Th>ID</Th><Th>Tên đăng nhập</Th><Th>Họ tên</Th><Th>Email</Th>
+            <Th>SĐT</Th><Th>Vai trò</Th><Th>Trạng thái</Th><Th>Đăng nhập gần nhất</Th><Th>Hành động</Th>
+          </Thead>
+          <tbody>
+            {loading ? <TableState type="loading" colSpan={9} /> :
+             error   ? <TableState type="error" colSpan={9} message={error} /> :
+             users.length === 0 ? <TableState type="empty" colSpan={9} message="Không có người dùng nào" /> :
+             users.map(u => (
+              <tr key={u.userId} className="hover:bg-slate-50 transition-colors">
+                <Td className="text-slate-400">{u.userId}</Td>
+                <Td><span className="font-medium text-slate-700">{u.username}</span></Td>
+                <Td>{u.fullName}</Td>
+                <Td className="text-slate-500">{u.email}</Td>
+                <Td>{u.phoneNumber || <span className="text-slate-300">—</span>}</Td>
+                <Td>
+                  <Badge variant={u.role === 2 ? 'admin' : u.role === 1 ? 'active' : u.role > 0 ? 'inactive' : 'customer'}>
+                    {u.role === 2 ? 'SuperAdmin' : u.role === 1 ? 'Admin' : u.role === 3 ? 'Quản lý Đơn' : u.role === 4 ? 'Quản lý Kho' : 'Khách hàng'}
+                  </Badge>
+                </Td>
+                <Td><Badge variant={u.isActive ? 'active' : 'inactive'}>{u.isActive ? 'Hoạt động' : 'Đã khóa'}</Badge></Td>
+                <Td className="text-slate-400 text-xs">{formatDate(u.lastLoginAt)}</Td>
+                <Td>
+                  <div className="flex gap-1.5">
+                    <ActionBtn variant="edit" onClick={() => openEditModal(u)} title="Sửa">✏️</ActionBtn>
+                    <ActionBtn variant="reset" onClick={() => handleResetPassword(u.userId)} title="Đặt lại mật khẩu">🔑</ActionBtn>
+                    <ActionBtn variant={u.isActive ? 'lock' : 'unlock'} onClick={() => handleToggleStatus(u.userId, u.isActive)} title={u.isActive ? 'Khóa' : 'Mở khóa'} disabled={u.userId === user?.userId}>
+                      {u.isActive ? '🔒' : '🔓'}
+                    </ActionBtn>
+                    {u.userId !== user?.userId && u.role !== 1 && (
+                      <ActionBtn variant="delete" onClick={() => handleDelete(u.userId)} title="Xóa">🗑️</ActionBtn>
+                    )}
+                  </div>
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+        {!loading && totalPages > 1 && (
+          <Pagination currentPage={currentPage} totalPages={totalPages}
+            onPrev={() => setCurrentPage(p => Math.max(p-1,1))}
+            onNext={() => setCurrentPage(p => Math.min(p+1,totalPages))} />
+        )}
+      </TableCard>
+
+      <Modal show={showModal} onClose={closeModal} title={modalMode === 'add' ? 'Thêm người dùng mới' : 'Chỉnh sửa người dùng'}>
+        <FormBody onSubmit={handleSubmit}>
+          <FormError message={formError} />
+          <FormRow>
+            <FormGroup label="Tên đăng nhập" required>
+              <FormInput name="username" value={formData.username} onChange={handleChange} required disabled={modalMode === 'edit'} />
+            </FormGroup>
+            <FormGroup label="Email" required>
+              <FormInput type="email" name="email" value={formData.email} onChange={handleChange} required />
+            </FormGroup>
+          </FormRow>
+          <FormRow>
+            <FormGroup label="Họ và tên" required>
+              <FormInput name="fullName" value={formData.fullName} onChange={handleChange} required />
+            </FormGroup>
+            <FormGroup label="Số điện thoại">
+              <FormInput type="tel" name="phoneNumber" value={formData.phoneNumber} onChange={handleChange} />
+            </FormGroup>
+          </FormRow>
+          <FormGroup label={modalMode === 'add' ? 'Mật khẩu' : 'Mật khẩu mới (để trống nếu không đổi)'} required={modalMode === 'add'}>
+            <FormInput type="password" name="password" value={formData.password} onChange={handleChange} required={modalMode === 'add'} minLength={6} placeholder={modalMode === 'edit' ? '••••••••' : ''} />
+          </FormGroup>
+          <FormGroup label="Địa chỉ">
+            <FormInput name="address" value={formData.address} onChange={handleChange} />
+          </FormGroup>
+          <FormRow cols={3}>
+            <FormGroup label="Tỉnh/Thành phố"><FormInput name="city" value={formData.city} onChange={handleChange} /></FormGroup>
+            <FormGroup label="Quận/Huyện"><FormInput name="district" value={formData.district} onChange={handleChange} /></FormGroup>
+            <FormGroup label="Phường/Xã"><FormInput name="ward" value={formData.ward} onChange={handleChange} /></FormGroup>
+          </FormRow>
+          <FormRow>
+            <FormGroup label="Vai trò" required>
+              <FormSelect name="role" value={formData.role} onChange={handleChange} required>
+                <option value={0}>Khách hàng</option>
+                <option value={1}>Admin</option>
+                <option value={2}>SuperAdmin</option>
+                <option value={3}>Quản lý Đơn hàng</option>
+                <option value={4}>Quản lý Kho</option>
+              </FormSelect>
+            </FormGroup>
+            <FormGroup label=" ">
+              <FormCheckbox label="Tài khoản hoạt động" name="isActive" checked={formData.isActive} onChange={handleChange} />
+            </FormGroup>
+          </FormRow>
+          <FormActions>
+            <Btn variant="outline" onClick={closeModal}>Hủy</Btn>
+            <Btn type="submit" disabled={formLoading}>{formLoading ? 'Đang xử lý...' : modalMode === 'add' ? 'Thêm người dùng' : 'Cập nhật'}</Btn>
+          </FormActions>
+        </FormBody>
+      </Modal>
+    </AdminLayout>
+  );
 };
 
 export default AdminUsers;

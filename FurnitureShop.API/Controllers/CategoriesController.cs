@@ -53,13 +53,28 @@ namespace FurnitureShop.API.Controllers
         }
 
         // GET: api/categories/{id}
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
         public async Task<IActionResult> GetCategory(int id)
         {
             var category = await _context.Categories
                 .Include(c => c.Children)
                 .Include(c => c.Products)
                 .FirstOrDefaultAsync(c => c.CategoryId == id);
+
+            if (category == null)
+                return NotFound(new { message = "Không tìm thấy danh mục" });
+
+            return Ok(category);
+        }
+
+        // GET: api/categories/by-slug/{slug}
+        [HttpGet("by-slug/{slug}")]
+        public async Task<IActionResult> GetCategoryBySlug(string slug)
+        {
+            var category = await _context.Categories
+                .Include(c => c.Children)
+                .Include(c => c.Products)
+                .FirstOrDefaultAsync(c => c.Slug == slug);
 
             if (category == null)
                 return NotFound(new { message = "Không tìm thấy danh mục" });

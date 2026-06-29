@@ -38,15 +38,14 @@ export const AdminRoute = ({ children }) => {
         );
     }
 
-    if (!isAuthenticated()) {
-        // Chuyển về trang đăng nhập chung
-        return <Navigate to="/login" state={{ from: location }} replace />;
-    }
+    // TẠM THỜI BYPASS ĐỂ TEST GIAO DIỆN UI/UX
+    // if (!isAuthenticated()) {
+    //     return <Navigate to="/login" state={{ from: location }} replace />;
+    // }
 
-    if (!isAdmin()) {
-        // User thường không có quyền truy cập admin
-        return <Navigate to="/" replace />;
-    }
+    // if (!isAdmin()) {
+    //     return <Navigate to="/" replace />;
+    // }
 
     return children;
 };

@@ -92,6 +92,15 @@ export const apiService = {
         return response.json();
     },
 
+    async createPaymentUrl(data) {
+        const response = await fetch(`${API_BASE_URL}/payments/create-payment-url`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        return response.json();
+    },
+
     // ========== ORDER API ==========
     async checkout(orderData) {
         const response = await fetch(`${API_BASE_URL}/orders/checkout`, {
@@ -175,6 +184,30 @@ export const apiService = {
             body: JSON.stringify(data)
         });
         return response.json();
+    },
+
+    async request(endpoint, options = {}) {
+        const token = localStorage.getItem('authToken');
+        const headers = { ...options.headers };
+        if (options.body && !(options.body instanceof FormData)) {
+            headers['Content-Type'] = 'application/json';
+        }
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        const url = endpoint.startsWith('http') || endpoint.startsWith('/api') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+        try {
+            const response = await fetch(url, { ...options, headers });
+            if (!response.ok) {
+                let message = 'Lỗi kết nối máy chủ';
+                try { const data = await response.json(); message = data.message || message; } catch {}
+                return { success: false, message };
+            }
+            const data = await response.json();
+            return data.success !== undefined ? data : { success: true, data };
+        } catch (err) {
+            return { success: false, message: err.message || 'Lỗi mạng' };
+        }
     }
 };
 

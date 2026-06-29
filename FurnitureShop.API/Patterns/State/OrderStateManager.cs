@@ -47,6 +47,8 @@ namespace FurnitureShop.API.Patterns.State
                 OrderStatus.Shipped => new ShippedState(),
                 OrderStatus.Completed => new CompletedState(),
                 OrderStatus.Cancelled => new CancelledState(),
+                OrderStatus.Refunded => new RefundedState(),
+                OrderStatus.Returned => new ReturnedState(),
                 _ => throw new ArgumentException($"Unknown status: {status}")
             };
         }
@@ -217,8 +219,22 @@ namespace FurnitureShop.API.Patterns.State
 
         public async Task<bool> HandleAsync(OrderStateContext context, string? notes, string? changedBy)
         {
-            // Không thể chuyển tiếp từ Completed
-            return false;
+            // Chuyển từ Completed -> Returned
+            var oldStatus = context.Order.Status;
+            context.Order.Status = OrderStatus.Returned;
+            context.Order.UpdatedAt = DateTime.UtcNow;
+
+            context.Order.StatusHistories.Add(new OrderStatusHistory
+            {
+                OrderId = context.Order.OrderId,
+                FromStatus = oldStatus,
+                ToStatus = OrderStatus.Returned,
+                Notes = notes ?? "Đơn hàng bị trả lại",
+                ChangedBy = changedBy ?? "System"
+            });
+
+            context.SetState(new ReturnedState());
+            return true;
         }
 
         public async Task<bool> CancelAsync(OrderStateContext context, string? reason, string? changedBy)
@@ -227,7 +243,7 @@ namespace FurnitureShop.API.Patterns.State
             return false;
         }
 
-        public List<OrderStatus> GetAvailableNextStates() => new();
+        public List<OrderStatus> GetAvailableNextStates() => new() { OrderStatus.Returned };
 
         public string GetStatusDescription() => "Đơn hàng đã hoàn thành";
     }
@@ -239,8 +255,22 @@ namespace FurnitureShop.API.Patterns.State
 
         public async Task<bool> HandleAsync(OrderStateContext context, string? notes, string? changedBy)
         {
-            // Không thể chuyển tiếp từ Cancelled
-            return false;
+            // Chuyển từ Cancelled -> Refunded
+            var oldStatus = context.Order.Status;
+            context.Order.Status = OrderStatus.Refunded;
+            context.Order.UpdatedAt = DateTime.UtcNow;
+
+            context.Order.StatusHistories.Add(new OrderStatusHistory
+            {
+                OrderId = context.Order.OrderId,
+                FromStatus = oldStatus,
+                ToStatus = OrderStatus.Refunded,
+                Notes = notes ?? "Đã hoàn tiền cho khách",
+                ChangedBy = changedBy ?? "System"
+            });
+
+            context.SetState(new RefundedState());
+            return true;
         }
 
         public async Task<bool> CancelAsync(OrderStateContext context, string? reason, string? changedBy)
@@ -249,8 +279,32 @@ namespace FurnitureShop.API.Patterns.State
             return false;
         }
 
-        public List<OrderStatus> GetAvailableNextStates() => new();
+        public List<OrderStatus> GetAvailableNextStates() => new() { OrderStatus.Refunded };
 
         public string GetStatusDescription() => "Đơn hàng đã bị hủy";
+    }
+
+    // STATE PATTERN: Concrete State - Refunded
+    public class RefundedState : IOrderState
+    {
+        public OrderStatus Status => OrderStatus.Refunded;
+
+        public async Task<bool> HandleAsync(OrderStateContext context, string? notes, string? changedBy) => false;
+        public async Task<bool> CancelAsync(OrderStateContext context, string? reason, string? changedBy) => false;
+
+        public List<OrderStatus> GetAvailableNextStates() => new();
+        public string GetStatusDescription() => "Đơn hàng đã được hoàn tiền";
+    }
+
+    // STATE PATTERN: Concrete State - Returned
+    public class ReturnedState : IOrderState
+    {
+        public OrderStatus Status => OrderStatus.Returned;
+
+        public async Task<bool> HandleAsync(OrderStateContext context, string? notes, string? changedBy) => false;
+        public async Task<bool> CancelAsync(OrderStateContext context, string? reason, string? changedBy) => false;
+
+        public List<OrderStatus> GetAvailableNextStates() => new();
+        public string GetStatusDescription() => "Đơn hàng đã bị trả lại";
     }
 }

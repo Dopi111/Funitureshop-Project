@@ -63,6 +63,11 @@ namespace FurnitureShop.API.Models
 
         public int ViewCount { get; set; } = 0;
 
+        // OPTIMISTIC CONCURRENCY: Ngăn Overbooking khi 2 user đặt hàng cùng lúc
+        // EF Core sẽ throw DbUpdateConcurrencyException nếu RowVersion bị thay đổi bởi transaction khác
+        [Timestamp]
+        public byte[]? RowVersion { get; set; }
+
         // Foreign Keys
         public int CategoryId { get; set; }
         public int? CollectionId { get; set; }

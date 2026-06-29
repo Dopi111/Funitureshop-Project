@@ -6,7 +6,7 @@
  * - Retry logic for transient failures
  */
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = 'http://localhost:5028/api';
 
 /**
  * Get auth token from localStorage

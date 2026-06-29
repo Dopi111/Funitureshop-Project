@@ -1,11 +1,13 @@
-﻿using FurnitureShop.API.Data;
+using FurnitureShop.API.Data;
 using FurnitureShop.API.DTOs;
 using FurnitureShop.API.Patterns.Decorator;
 using FurnitureShop.API.Patterns.Factory;
 using FurnitureShop.API.Patterns.Singleton;
 using FurnitureShop.API.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace FurnitureShop.API.Controllers
 {
@@ -16,46 +18,110 @@ namespace FurnitureShop.API.Controllers
         private readonly ProductService _productService;
         private readonly AppDbContext _context;
         private readonly ProductFactory _productFactory;
+        private readonly IMemoryCache _cache;
         // SINGLETON PATTERN: Sử dụng Logger Service duy nhất
         private readonly ILoggerService _logger = LoggerService.Instance;
 
-        public ProductsController(ProductService productService, AppDbContext context, ProductFactory productFactory)
+        public ProductsController(ProductService productService, AppDbContext context, ProductFactory productFactory, IMemoryCache cache)
         {
             _productService = productService;
             _context = context;
             _productFactory = productFactory;
+            _cache = cache;
             _logger.LogInfo($"ProductsController initialized. Logger Instance ID: {LoggerService.Instance.InstanceId}");
         }
 
         // GET: api/products
+        [AllowAnonymous]
         [HttpGet]
         public async Task<IActionResult> GetProducts(
-            [FromQuery] int? categoryId, 
+            [FromQuery] int? categoryId,
             [FromQuery] string? productType,
-            [FromQuery] int page = 1, 
+            [FromQuery] bool? isFeatured,
+            [FromQuery] decimal? minPrice,       // Lọc giá tối thiểu
+            [FromQuery] decimal? maxPrice,       // Lọc giá tối đa
+            [FromQuery] string? material,        // Lọc chất liệu
+            [FromQuery] string? color,           // Lọc màu sắc
+            [FromQuery] string? search,          // Tìm kiếm text
+            [FromQuery] string? sortBy = "newest",  // Sắp xếp
+            [FromQuery] decimal? minWidth = null,       // Rộng tối thiểu (cm)
+            [FromQuery] decimal? maxWidth = null,       // Rộng tối đa (cm)
+            [FromQuery] decimal? minHeight = null,      // Cao tối thiểu (cm)
+            [FromQuery] decimal? maxHeight = null,      // Cao tối đa (cm)
+            [FromQuery] decimal? minDepth = null,       // Sâu tối thiểu (cm)
+            [FromQuery] decimal? maxDepth = null,       // Sâu tối đa (cm)
+            [FromQuery] int page = 1,
             [FromQuery] int pageSize = 12)
         {
             var query = _context.Products
                 .Include(p => p.Category)
                 .Include(p => p.Images)
+                .Include(p => p.Attributes) // Eager loading attributes to prevent N+1 query
                 .Where(p => p.IsActive);
 
-            // Filter by category (including descendants)
+            // Lọc theo danh mục (bao gồm cả con cháu)
             if (categoryId.HasValue)
             {
                 var categoryIds = await GetAllDescendantCategoryIds(categoryId.Value);
                 query = query.Where(p => categoryIds.Contains(p.CategoryId));
             }
 
-            // Filter by ProductType
             if (!string.IsNullOrEmpty(productType))
-            {
                 query = query.Where(p => p.ProductType == productType);
-            }
+
+            if (isFeatured.HasValue)
+                query = query.Where(p => p.IsFeatured == isFeatured.Value);
+
+            // Lọc giá
+            if (minPrice.HasValue)
+                query = query.Where(p => (p.DiscountPrice ?? p.BasePrice) >= minPrice.Value);
+
+            if (maxPrice.HasValue)
+                query = query.Where(p => (p.DiscountPrice ?? p.BasePrice) <= maxPrice.Value);
+
+            // Lọc chất liệu (case-insensitive contains)
+            if (!string.IsNullOrEmpty(material))
+                query = query.Where(p => p.Material != null && p.Material.Contains(material));
+
+            // Lọc màu sắc
+            if (!string.IsNullOrEmpty(color))
+                query = query.Where(p => p.Color != null && p.Color.Contains(color));
+
+            // Lọc kích thước
+            if (minWidth.HasValue)
+                query = query.Where(p => p.Width >= minWidth.Value);
+            if (maxWidth.HasValue)
+                query = query.Where(p => p.Width <= maxWidth.Value);
+
+            if (minHeight.HasValue)
+                query = query.Where(p => p.Height >= minHeight.Value);
+            if (maxHeight.HasValue)
+                query = query.Where(p => p.Height <= maxHeight.Value);
+
+            if (minDepth.HasValue)
+                query = query.Where(p => p.Depth >= minDepth.Value);
+            if (maxDepth.HasValue)
+                query = query.Where(p => p.Depth <= maxDepth.Value);
+
+            // Tìm kiếm text (tên, mô tả, thương hiệu)
+            if (!string.IsNullOrEmpty(search))
+                query = query.Where(p =>
+                    p.Name.Contains(search) ||
+                    (p.Description != null && p.Description.Contains(search)) ||
+                    (p.Brand != null && p.Brand.Contains(search)));
+
+            // Sắp xếp
+            query = sortBy switch
+            {
+                "price_asc"  => query.OrderBy(p => p.DiscountPrice ?? p.BasePrice),
+                "price_desc" => query.OrderByDescending(p => p.DiscountPrice ?? p.BasePrice),
+                "name"       => query.OrderBy(p => p.Name),
+                "popular"    => query.OrderByDescending(p => p.ViewCount),
+                _            => query.OrderByDescending(p => p.CreatedAt)  // newest (mặc định)
+            };
 
             var total = await query.CountAsync();
             var products = await query
-                .OrderByDescending(p => p.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync();
@@ -72,29 +138,86 @@ namespace FurnitureShop.API.Controllers
         }
 
         /// <summary>
-        /// Recursively get all descendant category IDs including the parent
+        /// Lấy tất cả category con cháu - dùng IMemoryCache để tránh load toàn bộ DB mỗi request
         /// </summary>
         private async Task<List<int>> GetAllDescendantCategoryIds(int parentCategoryId)
         {
-            var allCategories = await _context.Categories.ToListAsync();
+            // Cache danh sách categories trong 5 phút → giảm query DB
+            var allCategories = await _cache.GetOrCreateAsync("all_categories_tree", async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+                return await _context.Categories
+                    .Select(c => new { c.CategoryId, c.ParentId })
+                    .ToListAsync();
+            });
+
             var result = new List<int> { parentCategoryId };
-            
+
             void AddDescendants(int parentId)
             {
-                var children = allCategories.Where(c => c.ParentId == parentId).ToList();
+                var children = allCategories!.Where(c => c.ParentId == parentId).ToList();
                 foreach (var child in children)
                 {
                     result.Add(child.CategoryId);
                     AddDescendants(child.CategoryId);
                 }
             }
-            
+
             AddDescendants(parentCategoryId);
             return result;
         }
 
+        // GET: api/products/suggest?keyword=so
+        [AllowAnonymous]
+        [HttpGet("suggest")]
+        public async Task<IActionResult> SuggestProducts([FromQuery] string? keyword)
+        {
+            if (string.IsNullOrWhiteSpace(keyword) || keyword.Trim().Length < 2)
+            {
+                return Ok(new { categories = new List<object>(), products = new List<object>() });
+            }
+
+            var cleanKeyword = keyword.Trim().ToLower();
+
+            // 1. Query Categories (max 3)
+            var matchedCategories = await _context.Categories
+                .Where(c => c.IsActive && c.Name.ToLower().Contains(cleanKeyword))
+                .OrderBy(c => c.DisplayOrder)
+                .Take(3)
+                .Select(c => new
+                {
+                    categoryId = c.CategoryId,
+                    name = c.Name,
+                    slug = c.Slug
+                })
+                .ToListAsync();
+
+            // 2. Query Products (max 5)
+            var matchedProducts = await _context.Products
+                .Include(p => p.Images)
+                .Where(p => p.IsActive && p.Name.ToLower().Contains(cleanKeyword))
+                .OrderByDescending(p => p.ViewCount)
+                .Take(5)
+                .Select(p => new
+                {
+                    productId = p.ProductId,
+                    name = p.Name,
+                    basePrice = p.BasePrice,
+                    discountPrice = p.DiscountPrice,
+                    imageUrl = p.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImageUrl).FirstOrDefault()
+                })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                categories = matchedCategories,
+                products = matchedProducts
+            });
+        }
+
         // GET: api/products/5
-        [HttpGet("{id}")]
+        [AllowAnonymous]
+        [HttpGet("{id:int}")]
         public async Task<IActionResult> GetProduct(int id)
         {
             var product = await _productService.GetProductByIdAsync(id);
@@ -106,6 +229,7 @@ namespace FurnitureShop.API.Controllers
         }
 
         // GET: api/products/featured
+        [AllowAnonymous]
         [HttpGet("featured")]
         public async Task<IActionResult> GetFeaturedProducts()
         {
@@ -114,6 +238,7 @@ namespace FurnitureShop.API.Controllers
         }
 
         // GET: api/products/product-types - Lấy tất cả ProductTypes
+        [AllowAnonymous]
         [HttpGet("product-types")]
         public async Task<IActionResult> GetAllProductTypes()
         {
@@ -123,6 +248,7 @@ namespace FurnitureShop.API.Controllers
         }
 
         // GET: api/products/product-types/by-category/{categoryId} - Lấy ProductTypes theo danh mục
+        [AllowAnonymous]
         [HttpGet("product-types/by-category/{categoryId}")]
         public async Task<IActionResult> GetProductTypesByCategory(int categoryId)
         {
@@ -142,8 +268,60 @@ namespace FurnitureShop.API.Controllers
             return Ok(productTypes);
         }
 
+        // GET: api/products/colors - Lấy danh sách màu sắc (tùy chọn categoryId)
+        [AllowAnonymous]
+        [HttpGet("colors")]
+        public async Task<IActionResult> GetColors([FromQuery] int? categoryId)
+        {
+            var query = _context.Products.Where(p => p.IsActive && p.Color != null && p.Color != "");
+            
+            if (categoryId.HasValue)
+            {
+                var categoryIds = await GetAllDescendantCategoryIds(categoryId.Value);
+                query = query.Where(p => categoryIds.Contains(p.CategoryId));
+            }
+
+            var colors = await query
+                .GroupBy(p => p.Color)
+                .Select(g => new {
+                    color = g.Key,
+                    count = g.Count()
+                })
+                .OrderBy(x => x.color)
+                .ToListAsync();
+
+            return Ok(colors);
+        }
+
+        // GET: api/products/materials - Lấy danh sách chất liệu (tùy chọn categoryId)
+        [AllowAnonymous]
+        [HttpGet("materials")]
+        public async Task<IActionResult> GetMaterials([FromQuery] int? categoryId)
+        {
+            var query = _context.Products.Where(p => p.IsActive && p.Material != null && p.Material != "");
+            
+            if (categoryId.HasValue)
+            {
+                var categoryIds = await GetAllDescendantCategoryIds(categoryId.Value);
+                query = query.Where(p => categoryIds.Contains(p.CategoryId));
+            }
+
+            var materials = await query
+                .GroupBy(p => p.Material)
+                .Select(g => new {
+                    material = g.Key,
+                    count = g.Count()
+                })
+                .OrderBy(x => x.material)
+                .ToListAsync();
+
+            return Ok(materials);
+        }
+
+
         // POST: api/products/configure
         // DECORATOR PATTERN: Calculate price with attributes
+        [AllowAnonymous]
         [HttpPost("configure")]
         public async Task<IActionResult> ConfigureProduct([FromBody] ProductConfigurationRequest request)
         {
@@ -182,6 +360,7 @@ namespace FurnitureShop.API.Controllers
         }
 
         // GET: api/products/category/5
+        [AllowAnonymous]
         [HttpGet("category/{categoryId}")]
         public async Task<IActionResult> GetByCategory(int categoryId)
         {
@@ -190,6 +369,7 @@ namespace FurnitureShop.API.Controllers
         }
 
         // POST: api/products - Thêm sản phẩm mới (Admin only)
+        [Authorize(Roles = "Admin")]
         [HttpPost]
         public async Task<IActionResult> CreateProduct([FromBody] CreateProductRequest request)
         {
@@ -211,11 +391,26 @@ namespace FurnitureShop.API.Controllers
                 Height = request.Height,
                 Depth = request.Depth,
                 Weight = request.Weight,
+                Material = request.Material,
+                Color = request.Color,
+                Brand = request.Brand,
                 IsActive = request.IsActive,
                 IsFeatured = request.IsFeatured,
-                Slug = GenerateSlug(request.Name),
+                Slug = string.IsNullOrWhiteSpace(request.Slug) ? GenerateSlug(request.Name) : GenerateSlug(request.Slug),
                 CreatedAt = DateTime.UtcNow
             };
+
+            if (!string.IsNullOrEmpty(request.ImageUrl))
+            {
+                product.Images.Add(new Models.Entities.ProductImage
+                {
+                    ImageUrl = request.ImageUrl,
+                    AltText = product.Name,
+                    IsPrimary = true,
+                    DisplayOrder = 0,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
 
             try
             {
@@ -236,6 +431,7 @@ namespace FurnitureShop.API.Controllers
         }
 
         // PUT: api/products/5 - Cập nhật sản phẩm (Admin only)
+        [Authorize(Roles = "Admin")]
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateProduct(int id, [FromBody] UpdateProductRequest request)
         {
@@ -260,10 +456,34 @@ namespace FurnitureShop.API.Controllers
             product.Height = request.Height;
             product.Depth = request.Depth;
             product.Weight = request.Weight;
+            product.Material = request.Material;
+            product.Color = request.Color;
+            product.Brand = request.Brand;
             product.IsActive = request.IsActive;
             product.IsFeatured = request.IsFeatured;
-            product.Slug = GenerateSlug(request.Name);
+            product.Slug = string.IsNullOrWhiteSpace(request.Slug) ? GenerateSlug(request.Name) : GenerateSlug(request.Slug);
             product.UpdatedAt = DateTime.UtcNow;
+
+            if (!string.IsNullOrEmpty(request.ImageUrl))
+            {
+                var primaryImg = product.Images.FirstOrDefault(i => i.IsPrimary) ?? product.Images.FirstOrDefault();
+                if (primaryImg != null)
+                {
+                    primaryImg.ImageUrl = request.ImageUrl;
+                }
+                else
+                {
+                    product.Images.Add(new Models.Entities.ProductImage
+                    {
+                        ProductId = product.ProductId,
+                        ImageUrl = request.ImageUrl,
+                        AltText = product.Name,
+                        IsPrimary = true,
+                        DisplayOrder = 0,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
 
             try
             {
@@ -283,6 +503,7 @@ namespace FurnitureShop.API.Controllers
         }
 
         // DELETE: api/products/5 - Xóa sản phẩm (Admin only)
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProduct(int id)
         {
@@ -301,6 +522,7 @@ namespace FurnitureShop.API.Controllers
         }
 
         // POST: api/products/{id}/upload-image - Upload ảnh cho sản phẩm (Admin only)
+        [Authorize(Roles = "Admin")]
         [HttpPost("{productId}/upload-image")]
         public async Task<IActionResult> UploadProductImage(int productId, IFormFile file)
         {
@@ -393,6 +615,7 @@ namespace FurnitureShop.API.Controllers
         }
 
         // DELETE: api/products/{productId}/images/{imageId} - Xóa ảnh sản phẩm (Admin only)
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{productId}/images/{imageId}")]
         public async Task<IActionResult> DeleteProductImage(int productId, int imageId)
         {
@@ -426,6 +649,7 @@ namespace FurnitureShop.API.Controllers
         }
 
         // PUT: api/products/{productId}/images/{imageId}/set-primary - Đặt làm ảnh chính
+        [Authorize(Roles = "Admin")]
         [HttpPut("{productId}/images/{imageId}/set-primary")]
         public async Task<IActionResult> SetPrimaryImage(int productId, int imageId)
         {
@@ -456,6 +680,7 @@ namespace FurnitureShop.API.Controllers
         }
 
         // GET: api/products/{productId}/images - Lấy danh sách ảnh của sản phẩm
+        [AllowAnonymous]
         [HttpGet("{productId}/images")]
         public async Task<IActionResult> GetProductImages(int productId)
         {
@@ -485,6 +710,7 @@ namespace FurnitureShop.API.Controllers
         }
 
         // GET: api/products/all - Lấy tất cả sản phẩm (bao gồm inactive - Admin only)
+        [Authorize(Roles = "Admin")]
         [HttpGet("all")]
         public async Task<IActionResult> GetAllProducts([FromQuery] int? categoryId, [FromQuery] int page = 1, [FromQuery] int pageSize = 12)
         {
@@ -559,8 +785,13 @@ namespace FurnitureShop.API.Controllers
         public decimal? Height { get; set; }
         public decimal? Depth { get; set; }
         public decimal? Weight { get; set; }
+        public string? Material { get; set; }
+        public string? Color { get; set; }
+        public string? Brand { get; set; }
+        public string? Slug { get; set; }
         public bool IsActive { get; set; } = true;
         public bool IsFeatured { get; set; } = false;
+        public string? ImageUrl { get; set; }
     }
 
     public class UpdateProductRequest
@@ -577,8 +808,13 @@ namespace FurnitureShop.API.Controllers
         public decimal? Height { get; set; }
         public decimal? Depth { get; set; }
         public decimal? Weight { get; set; }
+        public string? Material { get; set; }
+        public string? Color { get; set; }
+        public string? Brand { get; set; }
+        public string? Slug { get; set; }
         public bool IsActive { get; set; } = true;
         public bool IsFeatured { get; set; } = false;
+        public string? ImageUrl { get; set; }
     }
 }
 

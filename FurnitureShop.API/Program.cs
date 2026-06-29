@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using FurnitureShop.API.Data;
 using FurnitureShop.API.Services;
 using FurnitureShop.API.Patterns.Observer;
@@ -6,6 +6,11 @@ using FurnitureShop.API.Patterns.Facade;
 using FurnitureShop.API.Patterns.Factory;
 using FurnitureShop.API.Patterns.Repository.Contracts;
 using FurnitureShop.API.Patterns.Repository.Implementations;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using System.Threading.Channels;
+using FurnitureShop.API.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +31,7 @@ builder.Services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // SCOPED PATTERN: DbContext và Services
@@ -33,6 +39,7 @@ builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<CategoryService>();
+builder.Services.AddScoped<StatisticsService>();
 
 // AUTHENTICATION SERVICE
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -43,11 +50,47 @@ builder.Services.AddScoped<ICartService, CartService>();
 // FACADE PATTERN: Checkout Service
 builder.Services.AddScoped<CheckoutFacade>();
 
-// COMMAND PATTERN: Order Command Invoker (Singleton - duy trì lịch sử command giữa các request)
+// COMMAND PATTERN: Order Command Invoker (Singleton - duy trì  sử command  các request)
 builder.Services.AddSingleton<FurnitureShop.API.Patterns.Command.OrderCommandInvoker>();
 
 // FACTORY PATTERN: Product Factory
 builder.Services.AddSingleton<ProductFactory>();
+
+// ========== PRODUCT VIEW TRACKING (Channel + BackgroundService) ==========
+// BoundedChannel: back-pressure an toàn, capacity 5000 events
+builder.Services.AddSingleton(_ =>
+    Channel.CreateBounded<ProductViewEvent>(new BoundedChannelOptions(5_000)
+    {
+        FullMode    = BoundedChannelFullMode.DropWrite, // Drop silently khi đầy, không block
+        SingleReader = true,  // Chỉ BackgroundService đọc
+        SingleWriter = false  // Nhiều Controller có thể ghi
+    }));
+
+// Đăng ký BackgroundService — chạy suốt vòng đời ứng dụng
+builder.Services.AddSingleton<ProductViewBackgroundService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ProductViewBackgroundService>());
+
+// Service thống kê ProductView (Scoped vì dùng DbContext)
+builder.Services.AddScoped<ProductViewStatisticsService>();
+
+// DATABASE CLEANUP BACKGROUND SERVICE
+builder.Services.AddHostedService<DatabaseCleanupBackgroundService>();
+
+// ========== GHN SHIPPING INTEGRATION ==========
+// Named HttpClient với BaseUrl, Timeout, và Header mặc định
+builder.Services.AddHttpClient("GHN", (sp, client) =>
+{
+    var cfg = sp.GetRequiredService<IConfiguration>();
+    var baseUrl = cfg["GHN:BaseUrl"] ?? "https://dev-online-gateway.ghn.vn";
+    client.BaseAddress = new Uri(baseUrl);
+    client.Timeout     = TimeSpan.FromSeconds(10); // GHN thường phản hồi < 2s
+    client.DefaultRequestHeaders.Accept.Add(
+        new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+});
+builder.Services.AddScoped<GhnShippingService>();
+
+// ========== ANALYTICS & REPORTING ==========
+builder.Services.AddScoped<ClickToSaleService>();
 
 // ========== API CONFIGURATION ==========
 builder.Services.AddControllers()
@@ -58,7 +101,27 @@ builder.Services.AddControllers()
     });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddSignalR();
+builder.Services.AddAuthentication("Bearer")
+    .AddJwtBearer("Bearer", options =>
+    {
+        // Lấy JWT secret từ config (appsettings.json mục Jwt:Key)
+        var jwtKey = builder.Configuration["Jwt:Key"] ?? "FurnitureShopDefaultSecretKey_ChangeInProduction_2026";
+        var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
 
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateLifetime = true,              // Kểm tra token chưa hết hạn
+            ValidateIssuerSigningKey = true,      // Xác thực chữ ký
+            IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
+            ClockSkew = TimeSpan.FromMinutes(5)   // Cho phép lệch 5 phút giữa server
+        };
+    });
+
+builder.Services.AddMemoryCache(); // Cache cho GetAllDescendantCategoryIds
+builder.Services.AddAuthorization();
 // ========== CORS CONFIGURATION ==========
 builder.Services.AddCors(options =>
 {
@@ -80,18 +143,17 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "Furniture Shop API V1");
-        c.RoutePrefix = "api/docs"; // Swagger at /api/docs
+        c.RoutePrefix = string.Empty; // Swagger at root
     });
 }
 
 app.UseHttpsRedirection();
-app.UseStaticFiles(); // Serve static files from wwwroot
+app.UseStaticFiles(); // Serve static files from 
 app.UseCors("AllowAll");
+app.UseAuthentication();  
 app.UseAuthorization();
 app.MapControllers();
-
-// ========== DEFAULT ROUTE TO INDEX.HTML ==========
-app.MapFallbackToFile("index.html");
+app.MapHub<NotificationHub>("/hubs/notifications");
 
 // ========== DATABASE MIGRATION ==========
 using (var scope = app.Services.CreateScope())

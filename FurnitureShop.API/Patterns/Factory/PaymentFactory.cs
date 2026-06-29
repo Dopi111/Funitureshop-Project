@@ -357,6 +357,116 @@ namespace FurnitureShop.API.Patterns.Factory
         }
     }
 
+    /// <summary>
+    /// FACTORY METHOD PATTERN: Concrete Product - Momo Payment
+    /// Thanh toán qua Momo
+    /// </summary>
+    public class MomoPayment : IPaymentMethod
+    {
+        public string PaymentName => "Ví MoMo";
+        public string PaymentCode => "MOMO";
+
+        public async Task<PaymentResult> ProcessPaymentAsync(decimal amount, string orderId)
+        {
+            await Task.Delay(200);
+
+            var transactionId = $"MOMO_{DateTime.Now:yyyyMMddHHmmss}_{orderId}";
+            var paymentUrl = GetPaymentUrl(amount, orderId, "");
+
+            return new PaymentResult
+            {
+                Success = true,
+                TransactionId = transactionId,
+                Message = "Vui lòng hoàn tất thanh toán trên ứng dụng MoMo",
+                Status = PaymentStatus.Pending,
+                Amount = amount,
+                PaymentUrl = paymentUrl
+            };
+        }
+
+        public async Task<PaymentStatus> CheckPaymentStatusAsync(string transactionId)
+        {
+            await Task.Delay(100);
+            return PaymentStatus.Completed;
+        }
+
+        public async Task<RefundResult> RefundAsync(string transactionId, decimal amount)
+        {
+            await Task.Delay(200);
+            return new RefundResult
+            {
+                Success = true,
+                Message = "Yêu cầu hoàn tiền MoMo đã được gửi",
+                RefundId = $"MOMOREF_{DateTime.Now:yyyyMMddHHmmss}"
+            };
+        }
+
+        public bool ValidatePaymentInfo(PaymentInfo paymentInfo)
+        {
+            return !string.IsNullOrEmpty(paymentInfo.PhoneNumber);
+        }
+
+        public decimal GetTransactionFeePercent() => 1.5m; // MoMo ~1.5%
+
+        public string? GetPaymentUrl(decimal amount, string orderId, string returnUrl)
+        {
+            // Trong thực tế: Tạo URL API của MoMo để redirect
+            return $"https://test-payment.momo.vn/v2/gateway/pay?orderId={orderId}&amount={amount}";
+        }
+    }
+
+    /// <summary>
+    /// FACTORY METHOD PATTERN: Concrete Product - Bank Transfer
+    /// Chuyển khoản ngân hàng thủ công
+    /// </summary>
+    public class BankTransferPayment : IPaymentMethod
+    {
+        public string PaymentName => "Chuyển khoản ngân hàng";
+        public string PaymentCode => "BANK";
+
+        public async Task<PaymentResult> ProcessPaymentAsync(decimal amount, string orderId)
+        {
+            await Task.Delay(100);
+
+            return new PaymentResult
+            {
+                Success = true,
+                TransactionId = $"BANK_{orderId}_{DateTime.Now:yyyyMMddHHmmss}",
+                Message = "Vui lòng chuyển khoản theo thông tin: Ngân hàng VCB, STK: 123456789, Tên: FURNITURE SHOP. Nội dung: Thanh toan don hang " + orderId,
+                Status = PaymentStatus.Pending,
+                Amount = amount
+            };
+        }
+
+        public async Task<PaymentStatus> CheckPaymentStatusAsync(string transactionId)
+        {
+            await Task.Delay(50);
+            return PaymentStatus.Pending; // Trạng thái này sẽ được admin confirm thủ công
+        }
+
+        public async Task<RefundResult> RefundAsync(string transactionId, decimal amount)
+        {
+            await Task.Delay(50);
+            return new RefundResult
+            {
+                Success = false,
+                Message = "Hoàn tiền chuyển khoản cần được thực hiện thủ công"
+            };
+        }
+
+        public bool ValidatePaymentInfo(PaymentInfo paymentInfo)
+        {
+            return true; // Chuyển khoản không yêu cầu validate form thông tin đặc biệt
+        }
+
+        public decimal GetTransactionFeePercent() => 0; // Thường KH chịu phí chuyển khoản
+
+        public string? GetPaymentUrl(decimal amount, string orderId, string returnUrl)
+        {
+            return null; // Không redirect, chỉ hiện thông tin
+        }
+    }
+
     // ===========================================
     // CONCRETE CREATORS
     // ===========================================
@@ -394,6 +504,28 @@ namespace FurnitureShop.API.Patterns.Factory
         }
     }
 
+    /// <summary>
+    /// FACTORY METHOD PATTERN: Concrete Creator - Momo
+    /// </summary>
+    public class MomoPaymentCreator : PaymentMethodCreator
+    {
+        public override IPaymentMethod CreatePaymentMethod()
+        {
+            return new MomoPayment();
+        }
+    }
+
+    /// <summary>
+    /// FACTORY METHOD PATTERN: Concrete Creator - Bank Transfer
+    /// </summary>
+    public class BankTransferPaymentCreator : PaymentMethodCreator
+    {
+        public override IPaymentMethod CreatePaymentMethod()
+        {
+            return new BankTransferPayment();
+        }
+    }
+
     // ===========================================
     // SIMPLE FACTORY (Bonus) - Tạo Creator dựa trên code
     // ===========================================
@@ -413,6 +545,8 @@ namespace FurnitureShop.API.Patterns.Factory
                 "CASH" or "COD" => new CashPaymentCreator(),
                 "PAYPAL" or "PP" => new PayPalPaymentCreator(),
                 "VNPAY" or "VNP" => new VNPayPaymentCreator(),
+                "MOMO" => new MomoPaymentCreator(),
+                "BANK" or "TRANSFER" => new BankTransferPaymentCreator(),
                 _ => throw new ArgumentException($"Phương thức thanh toán không hỗ trợ: {paymentCode}")
             };
         }
@@ -426,7 +560,9 @@ namespace FurnitureShop.API.Patterns.Factory
             {
                 new() { Code = "CASH", Name = "Thanh toán khi nhận hàng (COD)", FeePercent = 0, Icon = "cash" },
                 new() { Code = "VNPAY", Name = "VNPay", FeePercent = 1.1m, Icon = "vnpay" },
-                new() { Code = "PAYPAL", Name = "PayPal", FeePercent = 2.9m, Icon = "paypal" }
+                new() { Code = "PAYPAL", Name = "PayPal", FeePercent = 2.9m, Icon = "paypal" },
+                new() { Code = "MOMO", Name = "Ví MoMo", FeePercent = 1.5m, Icon = "momo" },
+                new() { Code = "BANK", Name = "Chuyển khoản ngân hàng", FeePercent = 0, Icon = "bank" }
             };
         }
     }

@@ -4,6 +4,9 @@ using FurnitureShop.API.Patterns.Command;
 using FurnitureShop.API.Patterns.Observer;
 using FurnitureShop.API.Patterns.Singleton;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using FurnitureShop.API.Hubs;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace FurnitureShop.API.Controllers
 {
@@ -21,7 +24,9 @@ namespace FurnitureShop.API.Controllers
             OrderCommandInvoker commandInvoker,
             IEmailService emailService,
             ISmsService smsService,
-            IInventoryService inventoryService)
+            IInventoryService inventoryService,
+            IHubContext<NotificationHub> hubContext,
+            IMemoryCache cache)
         {
             _context = context;
             _commandInvoker = commandInvoker;
@@ -31,6 +36,8 @@ namespace FurnitureShop.API.Controllers
             _orderNotifier.Attach(new SmsNotificationObserver(smsService));
             _orderNotifier.Attach(new InventoryObserver(inventoryService));
             _orderNotifier.Attach(new AnalyticsObserver());
+            _orderNotifier.Attach(new SignalRObserver(hubContext));
+            _orderNotifier.Attach(new CacheInvalidationObserver(cache));
 
             _logger.LogInfo("OrderCommandsController initialized");
         }
@@ -45,6 +52,17 @@ namespace FurnitureShop.API.Controllers
             {
                 return BadRequest(new { success = false, message = "Cannot confirm order in current state" });
             }
+
+            _context.AuditLogs.Add(new Models.Entities.AuditLog
+            {
+                UserId = int.TryParse(request?.ChangedBy, out var uId1) ? uId1 : null,
+                Username = request?.ChangedBy ?? "System",
+                Action = "Confirm Order",
+                EntityName = "Order",
+                EntityId = orderId,
+                Details = $"Order #{orderId} confirmed"
+            });
+            await _context.SaveChangesAsync();
 
             return Ok(new
             {
@@ -66,10 +84,52 @@ namespace FurnitureShop.API.Controllers
                 return BadRequest(new { success = false, message = "Cannot ship order in current state" });
             }
 
+            _context.AuditLogs.Add(new Models.Entities.AuditLog
+            {
+                UserId = int.TryParse(request?.ChangedBy, out var uId2) ? uId2 : null,
+                Username = request?.ChangedBy ?? "System",
+                Action = "Ship Order",
+                EntityName = "Order",
+                EntityId = orderId,
+                Details = $"Order #{orderId} shipped"
+            });
+            await _context.SaveChangesAsync();
+
             return Ok(new
             {
                 success = true,
                 message = "Order shipped",
+                canUndo = _commandInvoker.CanUndo(orderId),
+                canRedo = _commandInvoker.CanRedo(orderId)
+            });
+        }
+
+        [HttpPost("{orderId}/complete")]
+        public async Task<IActionResult> Complete(int orderId, [FromBody] TransitionRequest? request)
+        {
+            var command = new CompleteOrderCommand(_context, _orderNotifier, orderId, request?.ChangedBy);
+            var success = await _commandInvoker.ExecuteAsync(command);
+
+            if (!success)
+            {
+                return BadRequest(new { success = false, message = "Cannot complete order in current state" });
+            }
+
+            _context.AuditLogs.Add(new Models.Entities.AuditLog
+            {
+                UserId = int.TryParse(request?.ChangedBy, out var uId3) ? uId3 : null,
+                Username = request?.ChangedBy ?? "System",
+                Action = "Complete Order",
+                EntityName = "Order",
+                EntityId = orderId,
+                Details = $"Order #{orderId} completed"
+            });
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                success = true,
+                message = "Order completed",
                 canUndo = _commandInvoker.CanUndo(orderId),
                 canRedo = _commandInvoker.CanRedo(orderId)
             });
@@ -85,6 +145,17 @@ namespace FurnitureShop.API.Controllers
             {
                 return BadRequest(new { success = false, message = "Cannot cancel order in current state" });
             }
+
+            _context.AuditLogs.Add(new Models.Entities.AuditLog
+            {
+                UserId = int.TryParse(request?.ChangedBy, out var uId4) ? uId4 : null,
+                Username = request?.ChangedBy ?? "System",
+                Action = "Cancel Order",
+                EntityName = "Order",
+                EntityId = orderId,
+                Details = $"Order #{orderId} cancelled. Reason: {request?.Reason}"
+            });
+            await _context.SaveChangesAsync();
 
             return Ok(new
             {
