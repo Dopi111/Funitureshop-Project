@@ -203,8 +203,8 @@ const AdminDashboard = () => {
       <TableCard>
         <Table>
           <Thead>
-            <Th>ID</Th><Th>H??nh ???nh</Th><Th>T??n s???n ph???m</Th><Th>Slug</Th><Th>Danh m???c</Th><Th>Chi ti???t</Th>
-            <Th>Gi?? g???c</Th><Th>Gi?? KM</Th><Th>T???n kho</Th><Th>Tr???ng th??i</Th><Th>H??nh ?????ng</Th>
+            <Th>ID</Th><Th>Hình ảnh</Th><Th>Tên sản phẩm</Th><Th>Slug</Th><Th>Danh mục</Th><Th>Chi tiết</Th>
+            <Th>Giá gốc</Th><Th>Giá KM</Th><Th>Tồn kho</Th><Th>Trạng thái</Th><Th>Hành động</Th>
           </Thead>
           <tbody>
             {loading ? <TableState type="loading" colSpan={11} /> :
@@ -260,15 +260,15 @@ const AdminDashboard = () => {
         <FormBody onSubmit={handleSubmit}>
           <FormError message={formError} />
 
-          <FormGroup label="T??n s???n ph???m" required>
+          <FormGroup label="Tên sản phẩm" required>
             <FormInput name="name" value={formData.name} onChange={handleNameChange} required />
           </FormGroup>
 
           <FormGroup label="Slug (URL)">
-            <FormInput name="slug" value={formData.slug} onChange={handleChange} placeholder="T??? ?????ng t???o t??? t??n" />
+            <FormInput name="slug" value={formData.slug} onChange={handleChange} placeholder="Tự động tạo từ tên" />
           </FormGroup>
 
-          <FormGroup label="M?? t???">
+          <FormGroup label="Mô tả">
             <FormTextarea name="description" value={formData.description} onChange={handleChange} rows={3} />
           </FormGroup>
 
@@ -361,3 +361,4 @@ const AdminDashboard = () => {
 };
 
 export default AdminDashboard;
+

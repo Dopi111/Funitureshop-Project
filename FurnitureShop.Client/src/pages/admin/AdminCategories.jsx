@@ -1,4 +1,3 @@
-// src/pages/admin/AdminCategories.jsx
 import React, { useState, useEffect } from 'react';
 import AdminLayout from '../../components/admin/AdminLayout';
 import {
@@ -73,7 +72,7 @@ const AdminCategories = () => {
 
   const handleDeleteImage = async (categoryId) => {
     if (!window.confirm('Bạn có chắc chắn muốn xóa ảnh này?')) return;
-    const r = await fetch(`/api/categories/${categoryId}/image`, { method:'DELETE', headers:{'Authorization':`Bearer ${localStorage.getItem('authToken')}`} });
+    const r = await fetch(`/api/categories/${categoryId}/image`, { method:'DELETE', headers:{'Authorization':`Bearer ${localStorage.getItem('authToken')}` } });
     if (!r.ok) { alert('Không thể xóa ảnh'); return; }
     await fetchCategories(); setFormData(p=>({...p,imageUrl:''}));
     if (selectedCategory) setSelectedCategory({...selectedCategory,imageUrl:null});
@@ -116,15 +115,14 @@ const AdminCategories = () => {
 
   return (
     <AdminLayout>
-      <PageHeader 
-        title="Quản lý danh mục" 
+      <PageHeader
+        title="Quản lý danh mục"
         subtitle="Phân loại, tổ chức nhóm mặt hàng và cấu trúc bộ sưu tập nội thất"
         breadcrumb={['Admin', 'Thương mại', 'Danh mục bộ sưu tập']}
       >
         <Btn onClick={openAddModal}>+ Thêm danh mục</Btn>
       </PageHeader>
 
-      {/* KPI Bento Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <div className="bg-white border border-zinc-200/80 rounded-2xl p-5 shadow-2xs flex items-center justify-between">
           <div>
@@ -132,7 +130,7 @@ const AdminCategories = () => {
             <div className="text-2xl sm:text-3xl font-light text-[#0D0D0D] tracking-tight">{totalCatCount} <span className="text-xs font-normal text-zinc-400">nhóm</span></div>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl font-bold border border-purple-100">
-            🗂️
+            DM
           </div>
         </div>
 
@@ -142,7 +140,7 @@ const AdminCategories = () => {
             <div className="text-2xl sm:text-3xl font-light text-[#0D0D0D] tracking-tight">{activeCatCount} <span className="text-xs font-normal text-zinc-400">hiển thị</span></div>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl font-bold border border-emerald-100">
-            🟢
+            ON
           </div>
         </div>
 
@@ -152,7 +150,7 @@ const AdminCategories = () => {
             <div className="text-2xl sm:text-3xl font-light text-[#0D0D0D] tracking-tight">{hiddenCatCount} <span className="text-xs font-normal text-zinc-400">đã ẩn</span></div>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-xl font-bold border border-amber-100">
-            🔒
+            OFF
           </div>
         </div>
       </div>
@@ -171,7 +169,7 @@ const AdminCategories = () => {
           <TableCard>
             <Table>
               <Thead>
-                <Th>ID</Th><Th>H??nh ???nh</Th><Th>T??n danh m???c</Th><Th>Slug</Th><Th>M?? t???</Th><Th>Th??? t???</Th><Th>Tr???ng th??i</Th><Th>H??nh ?????ng</Th>
+                <Th>ID</Th><Th>Hình ảnh</Th><Th>Tên danh mục</Th><Th>Slug</Th><Th>Mô tả</Th><Th>Thứ tự</Th><Th>Trạng thái</Th><Th>Hành động</Th>
               </Thead>
               <tbody>
                 {loading ? <TableState type="loading" colSpan={8} /> :
@@ -189,13 +187,13 @@ const AdminCategories = () => {
                       </button>
                     </Td>
                     <Td><code className="text-xs text-slate-500">{cat.slug || '-'}</code></Td>
-                    <Td className="text-slate-500 max-w-xs truncate">{cat.description || <span className="text-slate-300">—</span>}</Td>
+                    <Td className="text-slate-500 max-w-xs truncate">{cat.description || <span className="text-slate-300">-</span>}</Td>
                     <Td className="text-center">{cat.displayOrder}</Td>
                     <Td><Badge variant={cat.isActive?'active':'inactive'}>{cat.isActive?'Hoạt động':'Ẩn'}</Badge></Td>
                     <Td>
                       <div className="flex gap-1.5">
-                        <ActionBtn variant="edit" onClick={() => openEditModal(cat)} title="Sửa">✏️</ActionBtn>
-                        <ActionBtn variant="delete" onClick={() => handleDelete(cat.categoryId)} title="Xóa">🗑️</ActionBtn>
+                        <ActionBtn variant="edit" onClick={() => openEditModal(cat)} title="Sửa">Sua</ActionBtn>
+                        <ActionBtn variant="delete" onClick={() => handleDelete(cat.categoryId)} title="Xóa">Xoa</ActionBtn>
                       </div>
                     </Td>
                   </tr>
@@ -205,12 +203,11 @@ const AdminCategories = () => {
           </TableCard>
         </div>
 
-        {/* Product Types Panel */}
         {viewingCategory && (
           <div className="w-72 shrink-0 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-100">
               <h3 className="text-sm font-semibold text-slate-700 m-0">"{viewingCategory.name}"</h3>
-              <button onClick={() => setViewingCategory(null)} className="w-6 h-6 rounded text-slate-400 hover:text-slate-600 bg-transparent border-none cursor-pointer text-lg leading-none">×</button>
+              <button onClick={() => setViewingCategory(null)} className="w-6 h-6 rounded text-slate-400 hover:text-slate-600 bg-transparent border-none cursor-pointer text-lg leading-none">x</button>
             </div>
             <div className="p-4">
               {ptLoading ? (
@@ -263,13 +260,13 @@ const AdminCategories = () => {
             {imagePreview && (
               <div className="flex items-center gap-3 mt-2">
                 <img src={imagePreview} alt="Preview" className="w-20 h-20 object-cover rounded-lg border border-slate-200" />
-                <Btn variant="outline" size="sm" type="button" onClick={() => { setSelectedImage(null); setImagePreview(null); setFormData(p => ({ ...p, imageUrl: '' })); }}>✕ Xóa</Btn>
+                <Btn variant="outline" size="sm" type="button" onClick={() => { setSelectedImage(null); setImagePreview(null); setFormData(p => ({ ...p, imageUrl: '' })); }}>Xóa</Btn>
               </div>
             )}
             {modalMode==='edit' && selectedCategory?.imageUrl && !imagePreview && (
               <div className="flex items-center gap-3 mt-2">
                 <img src={selectedCategory.imageUrl} alt={selectedCategory.name} className="w-20 h-20 object-cover rounded-lg border border-slate-200" />
-                <Btn variant="outline" size="sm" type="button" onClick={() => handleDeleteImage(selectedCategory.categoryId)}>🗑️ Xóa ảnh</Btn>
+                <Btn variant="outline" size="sm" type="button" onClick={() => handleDeleteImage(selectedCategory.categoryId)}>Xóa ảnh</Btn>
               </div>
             )}
           </FormGroup>
