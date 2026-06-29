@@ -1,4 +1,5 @@
 using FurnitureShop.API.Models;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace FurnitureShop.API.Patterns.Observer
 {
@@ -207,6 +208,28 @@ Furniture Shop Team
         }
 
         public string GetObserverName() => "Analytics Logger";
+    }
+
+    // OBSERVER PATTERN: Concrete Observer - Cache Invalidation
+    public class CacheInvalidationObserver : IOrderObserver
+    {
+        private readonly IMemoryCache _cache;
+
+        public CacheInvalidationObserver(IMemoryCache cache)
+        {
+            _cache = cache;
+        }
+
+        public Task UpdateAsync(Order order, OrderStatus oldStatus, OrderStatus newStatus)
+        {
+            // Invalidating cache when order state changes
+            _cache.Remove("DashboardData_Cache");
+            Console.WriteLine($"   🧹 Cache invalidated for DashboardData_Cache");
+            
+            return Task.CompletedTask;
+        }
+
+        public string GetObserverName() => "Cache Invalidation";
     }
 
     // Service Interfaces (sẽ implement sau)

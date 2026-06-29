@@ -268,6 +268,91 @@ namespace FurnitureShop.API.Patterns.Command
     }
 
     // ══════════════════════════════════════════════════════════════════
+    // COMMAND 3.5: Hoàn thành đơn hàng (Shipped → Completed)
+    // Undo: Completed → Shipped
+    // ══════════════════════════════════════════════════════════════════
+    public class CompleteOrderCommand : IOrderCommand
+    {
+        private readonly AppDbContext _context;
+        private readonly OrderNotifier _notifier;
+        private readonly int _orderId;
+        private readonly string? _changedBy;
+
+        public int OrderId => _orderId;
+        public string CommandName => "CompleteOrder";
+
+        public CompleteOrderCommand(AppDbContext context, OrderNotifier notifier, int orderId, string? changedBy = null)
+        {
+            _context = context;
+            _notifier = notifier;
+            _orderId = orderId;
+            _changedBy = changedBy;
+        }
+
+        public async Task<bool> ExecuteAsync()
+        {
+            var order = await LoadOrderAsync();
+            if (order == null || order.Status != OrderStatus.Shipped) return false;
+
+            var oldStatus = order.Status;
+            order.Status = OrderStatus.Completed;
+            
+            // Cập nhật ngày hoàn thành và mặc định là đã thanh toán nếu hoàn thành
+            order.UpdatedAt = DateTime.UtcNow;
+            if (!order.IsPaid)
+            {
+                order.IsPaid = true;
+                order.PaidAt = DateTime.UtcNow;
+            }
+
+            order.StatusHistories.Add(new OrderStatusHistory
+            {
+                OrderId = order.OrderId,
+                FromStatus = oldStatus,
+                ToStatus = OrderStatus.Completed,
+                Notes = "Đơn hàng đã giao thành công và hoàn thành",
+                ChangedBy = _changedBy ?? "System"
+            });
+
+            await _context.SaveChangesAsync();
+            await _notifier.NotifyAsync(order, oldStatus, order.Status);
+
+            Console.WriteLine($"[Command] ✅ CompleteOrder #{order.OrderNumber}: Shipped → Completed");
+            return true;
+        }
+
+        public async Task<bool> UndoAsync()
+        {
+            var order = await LoadOrderAsync();
+            if (order == null || order.Status != OrderStatus.Completed) return false;
+
+            var oldStatus = order.Status;
+            order.Status = OrderStatus.Shipped;
+            order.UpdatedAt = DateTime.UtcNow;
+
+            order.StatusHistories.Add(new OrderStatusHistory
+            {
+                OrderId = order.OrderId,
+                FromStatus = oldStatus,
+                ToStatus = OrderStatus.Shipped,
+                Notes = "[Undo] Hoàn tác hoàn thành đơn hàng",
+                ChangedBy = _changedBy ?? "System"
+            });
+
+            await _context.SaveChangesAsync();
+            Console.WriteLine($"[Command] ↩️  Undo CompleteOrder #{order.OrderNumber}: Completed → Shipped");
+            return true;
+        }
+
+        private Task<Order?> LoadOrderAsync() =>
+            _context.Orders
+                .Include(o => o.User)
+                .Include(o => o.OrderDetails)
+                .Include(o => o.StatusHistories)
+                .FirstOrDefaultAsync(o => o.OrderId == _orderId);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
     // COMMAND 4: Đánh dấu đã thanh toán
     // Undo: bỏ đánh dấu thanh toán
     // ══════════════════════════════════════════════════════════════════

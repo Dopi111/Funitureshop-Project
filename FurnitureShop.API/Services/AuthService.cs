@@ -2,7 +2,11 @@ using FurnitureShop.API.Data;
 using FurnitureShop.API.DTOs;
 using FurnitureShop.API.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace FurnitureShop.API.Services
 {
@@ -25,11 +29,13 @@ namespace FurnitureShop.API.Services
     {
         private readonly AppDbContext _context;
         private readonly ILogger<AuthService> _logger;
+        private readonly IConfiguration _configuration;
 
-        public AuthService(AppDbContext context, ILogger<AuthService> logger)
+        public AuthService(AppDbContext context, ILogger<AuthService> logger, IConfiguration configuration)
         {
             _context = context;
             _logger = logger;
+            _configuration = configuration;
         }
 
         /// <summary>
@@ -116,10 +122,13 @@ namespace FurnitureShop.API.Services
 
                 _logger.LogInformation("User {Username} logged in successfully.", dto.Username);
 
+                // Tạo JWT token với Role claims để [Authorize(Roles="Admin")] hoạt động
+                var token = GenerateJwtToken(user);
+
                 return new AuthResponseDto(
                     true,
                     "Đăng nhập thành công!",
-                    Token: null,
+                    Token: token,
                     User: new UserInfoDto(user.UserId, user.Username, user.Email, user.FullName, user.Role.ToString())
                 );
             }
@@ -269,6 +278,34 @@ namespace FurnitureShop.API.Services
             
             // Lấy 6 số cuối và đảm bảo có đủ 6 chữ số
             return (randomNumber % 1000000).ToString("D6");
+        }
+
+        /// <summary>
+        /// Tạo JWT token với User ID, Username, Email, Role claims
+        /// </summary>
+        private string GenerateJwtToken(User user)
+        {
+            var jwtKey = _configuration["Jwt:Key"] ?? "FurnitureShopDefaultSecretKey_ChangeInProduction_2026";
+            var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
+            var signingKey = new SymmetricSecurityKey(keyBytes);
+
+            var claims = new[]
+            {
+                new Claim(JwtRegisteredClaimNames.Sub, user.UserId.ToString()),
+                new Claim(JwtRegisteredClaimNames.UniqueName, user.Username),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                new Claim(ClaimTypes.Role, user.Role.ToString()), // "Admin" hoặc "Customer"
+                new Claim("userId", user.UserId.ToString()),
+                new Claim("role", user.Role.ToString())
+            };
+
+            var token = new JwtSecurityToken(
+                claims: claims,
+                expires: DateTime.UtcNow.AddHours(24), // Token hết hạn sau 24h
+                signingCredentials: new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256)
+            );
+
+            return new JwtSecurityTokenHandler().WriteToken(token);
         }
     }
 }

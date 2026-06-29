@@ -1,0 +1,80 @@
+/*
+  admin.css
+  Minimal scoped resets for the admin panel.
+  Store styles are now in @layer store, so Tailwind utilities
+  automatically win — no more !important overrides needed.
+*/
+
+/* ── Break out of #root flex-column ────────────────────── */
+/* Store CSS sets #root { display:flex; flex-direction:column }
+   which squashes the sidebar. Reset it for admin. */
+#root:has(.admin-layout) {
+  display: block;
+  flex-direction: unset;
+}
+
+/* ── Typography reset ───────────────────────────────────── */
+.admin-layout,
+.admin-layout input,
+.admin-layout select,
+.admin-layout textarea,
+.admin-layout button {
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+.admin-layout h1,
+.admin-layout h2,
+.admin-layout h3,
+.admin-layout h4,
+.admin-layout h5,
+.admin-layout h6 {
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-weight: 600;
+  line-height: 1.3;
+  color: unset;
+}
+
+.admin-layout p {
+  margin-bottom: 0;
+  color: unset;
+}
+
+.admin-layout a {
+  color: unset;
+  text-decoration: none;
+}
+.admin-layout a:hover {
+  color: unset;
+}
+
+.admin-layout ul,
+.admin-layout ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* ── Sidebar ────────────────────────────────────────────── */
+.admin-layout aside.admin-sidebar {
+  background-color: #1C2434;
+  color: rgba(174, 183, 194, 0.9);
+}
+
+/* ── Scrollbar thin ─────────────────────────────────────── */
+.admin-layout .overflow-y-auto::-webkit-scrollbar { width: 4px; }
+.admin-layout .overflow-y-auto::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+.admin-layout .overflow-x-auto::-webkit-scrollbar { height: 4px; }
+.admin-layout .overflow-x-auto::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+
+/* ── Sidebar nav scrollbar ──────────────────────────────── */
+.admin-sidebar .sidebar-nav::-webkit-scrollbar { width: 4px; }
+.admin-sidebar .sidebar-nav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+
+/* ── Animations ─────────────────────────────────────────── */
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

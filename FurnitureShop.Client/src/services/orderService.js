@@ -60,6 +60,35 @@ export const orderService = {
     },
 
     /**
+     * Complete order (mark as completed)
+     */
+    async completeOrder(orderId, changedBy = 'System') {
+        return apiClient.post(`/order-commands/${orderId}/complete`, {
+            changedBy,
+        });
+    },
+
+    /**
+     * Transition order to next state generically
+     */
+    async transitionState(orderId, notes = '', changedBy = 'System') {
+        return apiClient.post(`/orders/${orderId}/next-state`, {
+            notes,
+            changedBy,
+        });
+    },
+
+    /**
+     * Approve return request
+     */
+    async approveReturn(orderId, notes = '', changedBy = 'System') {
+        return apiClient.post(`/orders/${orderId}/approve-return`, {
+            notes,
+            changedBy,
+        });
+    },
+
+    /**
      * Cancel order
      */
     async cancelOrder(orderId, reason = '', changedBy = 'System') {

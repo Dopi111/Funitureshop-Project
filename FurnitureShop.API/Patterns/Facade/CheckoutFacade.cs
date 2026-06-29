@@ -125,6 +125,7 @@ namespace FurnitureShop.API.Patterns.Facade
                         request.ShippingInfo.Ward)
                     .WithShippingMethod(request.ShippingMethodId ?? 1, shippingFee)
                     .WithTax(totalTax)
+                    .WithInstallation(request.RequireInstallation, 500000m)
                     .WithPaymentMethod(request.PaymentMethod)
                     .WithNotes(request.Notes);
 

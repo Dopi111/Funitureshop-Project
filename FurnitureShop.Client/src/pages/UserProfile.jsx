@@ -5,9 +5,13 @@ import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/navbar';
 import Footer from '../components/Footer';
 import apiService from '../services/apiService';
+import { toast } from 'react-hot-toast';
+import { useAvatar } from '../hooks/useAvatar';
+import '../index.css';
 
 export default function UserProfile() {
     const { user, isAuthenticated, updateUser } = useAuth();
+    const { avatar } = useAvatar(user?.userId);
     const navigate = useNavigate();
 
     const [activeTab, setActiveTab] = useState('info');
@@ -17,14 +21,10 @@ export default function UserProfile() {
     // ── Personal Info ──
     const [infoForm, setInfoForm] = useState({ fullName: '', address: '', city: '', district: '', ward: '' });
     const [infoSaving, setInfoSaving] = useState(false);
-    const [infoSuccess, setInfoSuccess] = useState('');
-    const [infoError, setInfoError] = useState('');
 
     // ── Password ──
     const [pwdForm, setPwdForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
     const [pwdSaving, setPwdSaving] = useState(false);
-    const [pwdSuccess, setPwdSuccess] = useState('');
-    const [pwdError, setPwdError] = useState('');
     const [showPwds, setShowPwds] = useState({ old: false, new_: false, confirm: false });
 
     // ── Contact OTP ──
@@ -35,8 +35,6 @@ export default function UserProfile() {
     const [devOtp, setDevOtp] = useState('');
     const [contactSending, setContactSending] = useState(false);
     const [contactVerifying, setContactVerifying] = useState(false);
-    const [contactSuccess, setContactSuccess] = useState('');
-    const [contactError, setContactError] = useState('');
 
     useEffect(() => {
         if (!isAuthenticated()) {
@@ -75,8 +73,11 @@ export default function UserProfile() {
     // ── Handlers ──
 
     const handleSaveInfo = async () => {
-        if (!infoForm.fullName.trim()) { setInfoError('Vui lòng nhập họ và tên'); return; }
-        setInfoSaving(true); setInfoError(''); setInfoSuccess('');
+        if (!infoForm.fullName.trim()) { 
+            toast.error('Vui lòng nhập họ và tên'); 
+            return; 
+        }
+        setInfoSaving(true);
         try {
             const res = await apiService.updateProfile({
                 userId: user.userId,
@@ -87,15 +88,14 @@ export default function UserProfile() {
                 ward: infoForm.ward || null,
             });
             if (res.success) {
-                setInfoSuccess('Cập nhật thông tin thành công!');
+                toast.success('Cập nhật thông tin thành công!');
                 updateUser({ fullName: infoForm.fullName });
                 setProfile(p => ({ ...p, fullName: infoForm.fullName, address: infoForm.address, city: infoForm.city, district: infoForm.district, ward: infoForm.ward }));
-                setTimeout(() => setInfoSuccess(''), 4000);
             } else {
-                setInfoError(res.message || 'Có lỗi xảy ra');
+                toast.error(res.message || 'Có lỗi xảy ra');
             }
         } catch {
-            setInfoError('Có lỗi xảy ra, vui lòng thử lại');
+            toast.error('Có lỗi xảy ra, vui lòng thử lại');
         } finally {
             setInfoSaving(false);
         }
@@ -103,11 +103,18 @@ export default function UserProfile() {
 
     const handleChangePassword = async () => {
         if (!pwdForm.oldPassword || !pwdForm.newPassword || !pwdForm.confirmPassword) {
-            setPwdError('Vui lòng điền đầy đủ thông tin'); return;
+            toast.error('Vui lòng điền đầy đủ thông tin'); 
+            return;
         }
-        if (pwdForm.newPassword.length < 6) { setPwdError('Mật khẩu mới phải có ít nhất 6 ký tự'); return; }
-        if (pwdForm.newPassword !== pwdForm.confirmPassword) { setPwdError('Xác nhận mật khẩu không khớp'); return; }
-        setPwdSaving(true); setPwdError(''); setPwdSuccess('');
+        if (pwdForm.newPassword.length < 6) { 
+            toast.error('Mật khẩu mới phải có ít nhất 6 ký tự'); 
+            return; 
+        }
+        if (pwdForm.newPassword !== pwdForm.confirmPassword) { 
+            toast.error('Xác nhận mật khẩu không khớp'); 
+            return; 
+        }
+        setPwdSaving(true);
         try {
             const res = await apiService.changePassword({
                 userId: user.userId,
@@ -115,14 +122,13 @@ export default function UserProfile() {
                 newPassword: pwdForm.newPassword,
             });
             if (res.success) {
-                setPwdSuccess('Đổi mật khẩu thành công!');
+                toast.success('Đổi mật khẩu thành công!');
                 setPwdForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
-                setTimeout(() => setPwdSuccess(''), 4000);
             } else {
-                setPwdError(res.message || 'Có lỗi xảy ra');
+                toast.error(res.message || 'Có lỗi xảy ra');
             }
         } catch {
-            setPwdError('Có lỗi xảy ra, vui lòng thử lại');
+            toast.error('Có lỗi xảy ra, vui lòng thử lại');
         } finally {
             setPwdSaving(false);
         }
@@ -130,24 +136,41 @@ export default function UserProfile() {
 
     const handleSendOtp = async () => {
         const val = newContactValue.trim();
-        if (!val) { setContactError(contactType === 'email' ? 'Vui lòng nhập email mới' : 'Vui lòng nhập số điện thoại mới'); return; }
-        if (contactType === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) { setContactError('Email không hợp lệ'); return; }
-        if (contactType === 'phone' && !/^(0|\+84)[0-9]{8,10}$/.test(val)) { setContactError('Số điện thoại không hợp lệ (vd: 0901234567)'); return; }
-        setContactSending(true); setContactError('');
+        if (!val) { 
+            toast.error(contactType === 'email' ? 'Vui lòng nhập email mới' : 'Vui lòng nhập số điện thoại mới'); 
+            return; 
+        }
+        if (contactType === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) { 
+            toast.error('Email không hợp lệ'); 
+            return; 
+        }
+        if (contactType === 'phone' && !/^(0|\+84)[0-9]{8,10}$/.test(val)) { 
+            toast.error('Số điện thoại không hợp lệ (vd: 0901234567)'); 
+            return; 
+        }
+        setContactSending(true);
         try {
             const res = await apiService.sendOtpForContact({ userId: user.userId, contactType, newValue: val });
-            if (res.success) { setOtpStep(true); setDevOtp(res.otpCode || ''); }
-            else { setContactError(res.message || 'Có lỗi xảy ra'); }
+            if (res.success) { 
+                setOtpStep(true); 
+                setDevOtp(res.otpCode || ''); 
+                toast.success('Mã OTP đã được gửi thành công');
+            } else { 
+                toast.error(res.message || 'Có lỗi xảy ra'); 
+            }
         } catch {
-            setContactError('Có lỗi xảy ra, vui lòng thử lại');
+            toast.error('Có lỗi xảy ra, vui lòng thử lại');
         } finally {
             setContactSending(false);
         }
     };
 
     const handleVerifyOtp = async () => {
-        if (!/^\d{6}$/.test(otpCode)) { setContactError('Mã OTP phải gồm 6 chữ số'); return; }
-        setContactVerifying(true); setContactError('');
+        if (!/^\d{6}$/.test(otpCode)) { 
+            toast.error('Mã OTP phải gồm 6 chữ số'); 
+            return; 
+        }
+        setContactVerifying(true);
         try {
             const res = await apiService.updateContact({
                 userId: user.userId,
@@ -156,16 +179,18 @@ export default function UserProfile() {
                 otpCode,
             });
             if (res.success) {
-                setContactSuccess(res.message || 'Cập nhật thành công!');
-                setOtpStep(false); setOtpCode(''); setNewContactValue(''); setDevOtp('');
+                toast.success(res.message || 'Cập nhật thành công!');
+                setOtpStep(false); 
+                setOtpCode(''); 
+                setNewContactValue(''); 
+                setDevOtp('');
                 if (contactType === 'email') updateUser({ email: newContactValue.trim() });
                 await loadProfile();
-                setTimeout(() => setContactSuccess(''), 5000);
             } else {
-                setContactError(res.message || 'Có lỗi xảy ra');
+                toast.error(res.message || 'Có lỗi xảy ra');
             }
         } catch {
-            setContactError('Có lỗi xảy ra, vui lòng thử lại');
+            toast.error('Có lỗi xảy ra, vui lòng thử lại');
         } finally {
             setContactVerifying(false);
         }
@@ -180,7 +205,9 @@ export default function UserProfile() {
             while (chars.length > 0 && chars[chars.length - 1] === '') chars.pop();
             return chars.join('');
         });
-        if (digit && i < 5) setTimeout(() => document.getElementById(`potp-${i + 1}`)?.focus(), 0);
+        if (digit && i < 5) {
+            setTimeout(() => document.getElementById(`potp-${i + 1}`)?.focus(), 0);
+        }
     };
 
     const handleOtpKeyDown = (i, e) => {
@@ -198,167 +225,192 @@ export default function UserProfile() {
     if (!isAuthenticated()) return null;
 
     return (
-        <div className="app">
+        <div className="bg-[#FDFBF7] min-h-screen flex flex-col font-['Outfit']">
             <Navbar />
-            <main className="profile-page">
-                <div className="container">
-                    {/* Breadcrumb */}
-                    <div className="profile-breadcrumb">
-                        <Link to="/">Trang chủ</Link>
-                        <span> &rsaquo; </span>
-                        <span>Tài khoản của tôi</span>
+            
+            <main className="flex-1 py-12 md:py-16">
+                <div className="max-w-[1200px] mx-auto px-6 w-full">
+                    
+                    {/* Breadcrumbs */}
+                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-[#8A8278] mb-8 pb-4 border-b border-[#E8E4DC]/60">
+                        <Link to="/" className="hover:text-[#0D0D0D] transition-colors">Trang chủ</Link>
+                        <span className="text-[#E8E4DC]">/</span>
+                        <span className="text-[#0D0D0D] font-medium">Tài khoản của tôi</span>
                     </div>
 
-                    <div className="profile-layout">
-                        {/* ── Sidebar ── */}
-                        <aside className="profile-sidebar">
-                            <div className="profile-avatar-box">
-                                <div className="profile-avatar">
-                                    {loading ? '?' : getInitials(profile?.fullName || user?.fullName)}
-                                </div>
-                                <div className="profile-avatar-name">{profile?.fullName || user?.fullName}</div>
-                                <div className="profile-avatar-email">{profile?.email || user?.email}</div>
-                                <span className={`profile-role-badge${profile?.role === 'Admin' ? ' admin' : ''}`}>
-                                    {profile?.role === 'Admin' ? '⚙️ Quản trị viên' : '👤 Khách hàng'}
-                                </span>
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-10 items-start">
+                        {/* ── Sidebar Left ── */}
+                        <aside className="lg:col-span-1 bg-[#F5F2EC] p-8 flex flex-col items-center border border-[#E8E4DC] relative">
+                            {/* Squircle Avatar */}
+                            <div className="w-20 h-20 bg-[#0D0D0D] text-[#FDFBF7] flex items-center justify-center text-2xl font-bold rounded-[1.5rem] mb-4 shadow-sm select-none overflow-hidden border border-[#E8E4DC]">
+                                {loading ? '?' : avatar ? (
+                                    <img src={avatar} alt="User Avatar" className="w-full h-full object-cover" />
+                                ) : (
+                                    getInitials(profile?.fullName || user?.fullName)
+                                )}
                             </div>
+                            <div className="text-sm font-semibold text-[#0d0d0d] text-center max-w-full truncate">{profile?.fullName || user?.fullName}</div>
+                            <div className="text-[11px] text-[#8A8278] text-center max-w-full truncate mb-4">{profile?.email || user?.email}</div>
+                            
+                            <span className={`text-[9px] uppercase tracking-[0.15em] font-bold px-3 py-1 border mb-8 ${
+                                profile?.role === 'Admin' 
+                                    ? 'bg-[#C9A87C]/15 text-[#C9A87C] border-[#C9A87C]/30' 
+                                    : 'bg-[#0D0D0D]/5 text-[#0d0d0d] border-[#0D0D0D]/10'
+                            }`}>
+                                {profile?.role === 'Admin' ? '⚙️ Quản trị viên' : '👤 Khách hàng'}
+                            </span>
 
-                            <nav className="profile-nav">
+                            <nav className="w-full flex flex-col gap-1 border-t border-[#E8E4DC] pt-6">
                                 <button
-                                    className={`profile-nav-item${activeTab === 'info' ? ' active' : ''}`}
+                                    className={`w-full text-left px-4 py-3 text-[10px] uppercase tracking-widest font-bold transition-all cursor-pointer ${
+                                        activeTab === 'info' 
+                                            ? 'bg-[#0D0D0D] text-[#FDFBF7]' 
+                                            : 'text-[#8A8278] hover:text-[#0D0D0D] hover:bg-[#F5F2EC]/40'
+                                    }`}
                                     onClick={() => setActiveTab('info')}
                                 >
-                                    📋 Thông tin cá nhân
+                                    👤 Thông tin cá nhân
                                 </button>
                                 <button
-                                    className={`profile-nav-item${activeTab === 'password' ? ' active' : ''}`}
+                                    className={`w-full text-left px-4 py-3 text-[10px] uppercase tracking-widest font-bold transition-all cursor-pointer ${
+                                        activeTab === 'password' 
+                                            ? 'bg-[#0D0D0D] text-[#FDFBF7]' 
+                                            : 'text-[#8A8278] hover:text-[#0D0D0D] hover:bg-[#F5F2EC]/40'
+                                    }`}
                                     onClick={() => setActiveTab('password')}
                                 >
                                     🔒 Đổi mật khẩu
                                 </button>
                                 <button
-                                    className={`profile-nav-item${activeTab === 'contact' ? ' active' : ''}`}
+                                    className={`w-full text-left px-4 py-3 text-[10px] uppercase tracking-widest font-bold transition-all cursor-pointer ${
+                                        activeTab === 'contact' 
+                                            ? 'bg-[#0D0D0D] text-[#FDFBF7]' 
+                                            : 'text-[#8A8278] hover:text-[#0D0D0D] hover:bg-[#F5F2EC]/40'
+                                    }`}
                                     onClick={() => setActiveTab('contact')}
                                 >
                                     📱 Đổi liên hệ
                                 </button>
-                                <Link to="/my-orders" className="profile-nav-item">
+                                <Link 
+                                    to="/my-orders" 
+                                    className="w-full text-left px-4 py-3 text-[10px] uppercase tracking-widest font-bold text-[#8A8278] hover:text-[#0D0D0D] hover:bg-[#F5F2EC]/40 transition-all"
+                                >
                                     📦 Đơn hàng của tôi
                                 </Link>
                             </nav>
                         </aside>
 
-                        {/* ── Main content ── */}
-                        <div className="profile-content">
+                        {/* ── Main content panel ── */}
+                        <div className="lg:col-span-3">
                             {loading ? (
-                                <div className="profile-card profile-loading">
-                                    <div className="loading-spinner" />
-                                    <p>Đang tải thông tin tài khoản...</p>
+                                <div className="bg-white border border-[#E8E4DC] p-12 text-center flex flex-col items-center justify-center">
+                                    <div className="w-8 h-8 border-2 border-[#E8E4DC] border-t-[#0D0D0D] rounded-full animate-spin mb-3" />
+                                    <p className="text-xs uppercase tracking-wider font-bold text-[#8A8278]">Đang tải thông tin tài khoản...</p>
                                 </div>
                             ) : (
-                                <>
+                                <div className="bg-white border border-[#E8E4DC] p-8 md:p-10 shadow-[0_2px_12px_rgba(13,13,13,0.03)] animate-fade-up">
+                                    
                                     {/* ── TAB: Personal Info ── */}
                                     {activeTab === 'info' && (
-                                        <div className="profile-card">
-                                            <div className="profile-card-header">
-                                                <h2>📋 Thông tin cá nhân</h2>                                                
+                                        <div className="space-y-8">
+                                            <div className="pb-4 border-b border-[#E8E4DC]">
+                                                <h2 className="text-lg font-medium text-[#0D0D0D] uppercase tracking-wide">Thông tin cá nhân</h2>
+                                                <p className="text-xs text-[#8A8278] mt-1">Cập nhật thông tin chi tiết và địa chỉ giao hàng của bạn</p>
                                             </div>
 
-                                            {infoSuccess && <div className="profile-success">{infoSuccess}</div>}
-                                            {infoError && <div className="profile-error">{infoError}</div>}
-
-                                            {/* Read-only fields */}
-                                            <div className="profile-readonly-grid">
-                                                <div className="profile-readonly-item">
-                                                    <span className="profile-readonly-label">Tên đăng nhập</span>
-                                                    <span className="profile-readonly-value">{profile?.username}</span>
+                                            {/* 3-column Read-only grid */}
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 bg-[#F5F2EC]/40 border border-[#E8E4DC]">
+                                                <div className="space-y-1">
+                                                    <span className="text-[9px] uppercase tracking-wider text-[#8A8278] font-bold">Tên đăng nhập</span>
+                                                    <span className="block text-sm font-semibold text-[#0d0d0d]">{profile?.username}</span>
                                                 </div>
-                                                <div className="profile-readonly-item">
-                                                    <span className="profile-readonly-label">Email</span>
-                                                    <span className="profile-readonly-value">{profile?.email}</span>
+                                                <div className="space-y-1">
+                                                    <span className="text-[9px] uppercase tracking-wider text-[#8A8278] font-bold">Email</span>
+                                                    <span className="block text-sm font-semibold text-[#0d0d0d] truncate" title={profile?.email}>{profile?.email}</span>
                                                 </div>
-                                                <div className="profile-readonly-item">
-                                                    <span className="profile-readonly-label">Số điện thoại</span>
-                                                    <span className="profile-readonly-value">
-                                                        {profile?.phoneNumber || <em className="profile-empty">Chưa cập nhật</em>}
+                                                <div className="space-y-1">
+                                                    <span className="text-[9px] uppercase tracking-wider text-[#8A8278] font-bold">Số điện thoại</span>
+                                                    <span className="block text-sm font-semibold text-[#0d0d0d]">
+                                                        {profile?.phoneNumber || <em className="text-[#8A8278] not-italic font-normal">Chưa cập nhật</em>}
                                                     </span>
                                                 </div>
                                             </div>
-                                            <p className="profile-readonly-hint">
-                                                💡 Để đổi email hoặc số điện thoại, vui lòng vào tab{' '}
-                                                <button className="profile-tab-link" onClick={() => setActiveTab('contact')}>
-                                                    Đổi liên hệ
-                                                </button>
+                                            
+                                            <p className="text-xs text-[#8A8278]">
+                                                💡 Để đổi email hoặc số điện thoại, vui lòng chọn tab{' '}
+                                                <button className="text-[#C9A87C] font-semibold hover:underline cursor-pointer" onClick={() => setActiveTab('contact')}>
+                                                    Đổi thông tin liên hệ
+                                                </button>.
                                             </p>
 
-                                            <div className="profile-divider" />
-
-                                            <div className="profile-form">
-                                                <div className="form-group">
-                                                    <label>Họ và tên <span className="co-required">*</span></label>
+                                            <div className="border-t border-[#E8E4DC]/60 pt-8 space-y-6">
+                                                {/* Form Fields */}
+                                                <div className="input-wrap">
                                                     <input
                                                         type="text"
-                                                        className="profile-input"
+                                                        className="input-field font-medium"
+                                                        placeholder=" "
                                                         value={infoForm.fullName}
                                                         onChange={e => setInfoForm(p => ({ ...p, fullName: e.target.value }))}
-                                                        placeholder="Nguyễn Văn A"
+                                                        required
                                                     />
+                                                    <label className="floating-label">Họ và tên *</label>
                                                 </div>
 
-                                                <div className="profile-address-section">
-                                                    <h3 className="profile-section-title">🏠 Địa chỉ giao hàng mặc định</h3>
+                                                <div className="space-y-6 pt-2">
+                                                    <h3 className="text-xs uppercase tracking-widest font-bold text-[#C9A87C]">Địa chỉ giao hàng mặc định</h3>
 
-                                                    <div className="form-group">
-                                                        <label>Địa chỉ (số nhà, tên đường, phường/xã)</label>
+                                                    <div className="input-wrap">
                                                         <input
                                                             type="text"
-                                                            className="profile-input"
+                                                            className="input-field"
+                                                            placeholder=" "
                                                             value={infoForm.address}
                                                             onChange={e => setInfoForm(p => ({ ...p, address: e.target.value }))}
-                                                            placeholder="123 Đường Lê Lợi, Phường Bến Nghé"
                                                         />
+                                                        <label className="floating-label">Địa chỉ cụ thể (Số nhà, tên đường...)</label>
                                                     </div>
 
-                                                    <div className="profile-form-row-3">
-                                                        <div className="form-group">
-                                                            <label>Tỉnh / Thành phố</label>
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                        <div className="input-wrap">
                                                             <input
                                                                 type="text"
-                                                                className="profile-input"
+                                                                className="input-field"
+                                                                placeholder=" "
                                                                 value={infoForm.city}
                                                                 onChange={e => setInfoForm(p => ({ ...p, city: e.target.value }))}
-                                                                placeholder="TP. Hồ Chí Minh"
                                                             />
+                                                            <label className="floating-label">Tỉnh / Thành phố</label>
                                                         </div>
-                                                        <div className="form-group">
-                                                            <label>Quận / Huyện</label>
+                                                        <div className="input-wrap">
                                                             <input
                                                                 type="text"
-                                                                className="profile-input"
+                                                                className="input-field"
+                                                                placeholder=" "
                                                                 value={infoForm.district}
                                                                 onChange={e => setInfoForm(p => ({ ...p, district: e.target.value }))}
-                                                                placeholder="Quận 1"
                                                             />
+                                                            <label className="floating-label">Quận / Huyện</label>
                                                         </div>
-                                                        <div className="form-group">
-                                                            <label>Phường / Xã</label>
+                                                        <div className="input-wrap">
                                                             <input
                                                                 type="text"
-                                                                className="profile-input"
+                                                                className="input-field"
+                                                                placeholder=" "
                                                                 value={infoForm.ward}
                                                                 onChange={e => setInfoForm(p => ({ ...p, ward: e.target.value }))}
-                                                                placeholder="Phường Bến Nghé"
                                                             />
+                                                            <label className="floating-label">Phường / Xã</label>
                                                         </div>
                                                     </div>
                                                 </div>
 
                                                 <button
-                                                    className="profile-btn-primary"
+                                                    className="w-full py-4 bg-[#0D0D0D] text-[#FDFBF7] font-semibold text-xs uppercase tracking-widest hover:bg-[#C9A87C] hover:text-[#0D0D0D] transition-colors cursor-pointer"
                                                     onClick={handleSaveInfo}
                                                     disabled={infoSaving}
                                                 >
-                                                    {infoSaving ? 'Đang lưu...' : '💾 Lưu thông tin'}
+                                                    {infoSaving ? 'Đang cập nhật...' : 'Cập nhật thông tin'}
                                                 </button>
                                             </div>
                                         </div>
@@ -366,93 +418,95 @@ export default function UserProfile() {
 
                                     {/* ── TAB: Change Password ── */}
                                     {activeTab === 'password' && (
-                                        <div className="profile-card">
-                                            <div className="profile-card-header">
-                                                <h2>🔒 Đổi mật khẩu</h2>
-                                                <p>Để bảo mật tài khoản, vui lòng không chia sẻ mật khẩu cho người khác</p>
+                                        <div className="space-y-8 max-w-md">
+                                            <div className="pb-4 border-b border-[#E8E4DC]">
+                                                <h2 className="text-lg font-medium text-[#0D0D0D] uppercase tracking-wide">Đổi mật khẩu</h2>
+                                                <p className="text-xs text-[#8A8278] mt-1">Đảm bảo mật khẩu của bạn có độ dài từ 6 ký tự trở lên để tăng tính bảo mật</p>
                                             </div>
 
-                                            {pwdSuccess && <div className="profile-success">{pwdSuccess}</div>}
-                                            {pwdError && <div className="profile-error">{pwdError}</div>}
-
-                                            <div className="profile-form profile-form-narrow">
-                                                <div className="form-group">
-                                                    <label>Mật khẩu hiện tại <span className="co-required">*</span></label>
-                                                    <div className="profile-input-wrap">
-                                                        <input
-                                                            type={showPwds.old ? 'text' : 'password'}
-                                                            className="profile-input"
-                                                            value={pwdForm.oldPassword}
-                                                            onChange={e => setPwdForm(p => ({ ...p, oldPassword: e.target.value }))}
-                                                            placeholder="Nhập mật khẩu hiện tại"
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            className="profile-eye-btn"
-                                                            onClick={() => setShowPwds(p => ({ ...p, old: !p.old }))}
-                                                        >
-                                                            {showPwds.old ? '🙈' : '👁️'}
-                                                        </button>
-                                                    </div>
+                                            <div className="space-y-6">
+                                                <div className="input-wrap">
+                                                    <input
+                                                        type={showPwds.old ? 'text' : 'password'}
+                                                        className="input-field pr-10 font-mono"
+                                                        placeholder=" "
+                                                        value={pwdForm.oldPassword}
+                                                        onChange={e => setPwdForm(p => ({ ...p, oldPassword: e.target.value }))}
+                                                        required
+                                                    />
+                                                    <label className="floating-label">Mật khẩu hiện tại *</label>
+                                                    <button
+                                                        type="button"
+                                                        className="absolute right-0 bottom-2 text-[#8A8278] hover:text-[#0d0d0d] transition-colors cursor-pointer text-sm"
+                                                        onClick={() => setShowPwds(p => ({ ...p, old: !p.old }))}
+                                                    >
+                                                        {showPwds.old ? '🙈' : '👁️'}
+                                                    </button>
                                                 </div>
 
-                                                <div className="form-group">
-                                                    <label>Mật khẩu mới <span className="co-required">*</span></label>
-                                                    <div className="profile-input-wrap">
-                                                        <input
-                                                            type={showPwds.new_ ? 'text' : 'password'}
-                                                            className="profile-input"
-                                                            value={pwdForm.newPassword}
-                                                            onChange={e => setPwdForm(p => ({ ...p, newPassword: e.target.value }))}
-                                                            placeholder="Ít nhất 6 ký tự"
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            className="profile-eye-btn"
-                                                            onClick={() => setShowPwds(p => ({ ...p, new_: !p.new_ }))}
-                                                        >
-                                                            {showPwds.new_ ? '🙈' : '👁️'}
-                                                        </button>
-                                                    </div>
+                                                <div className="input-wrap">
+                                                    <input
+                                                        type={showPwds.new_ ? 'text' : 'password'}
+                                                        className="input-field pr-10 font-mono"
+                                                        placeholder=" "
+                                                        value={pwdForm.newPassword}
+                                                        onChange={e => setPwdForm(p => ({ ...p, newPassword: e.target.value }))}
+                                                        required
+                                                    />
+                                                    <label className="floating-label">Mật khẩu mới *</label>
+                                                    <button
+                                                        type="button"
+                                                        className="absolute right-0 bottom-2 text-[#8A8278] hover:text-[#0d0d0d] transition-colors cursor-pointer text-sm"
+                                                        onClick={() => setShowPwds(p => ({ ...p, new_: !p.new_ }))}
+                                                    >
+                                                        {showPwds.new_ ? '🙈' : '👁️'}
+                                                    </button>
+                                                    
+                                                    {/* Password strength meter */}
                                                     {pwdStrength && (
-                                                        <div className="profile-pwd-strength">
-                                                            <div className="profile-pwd-track">
-                                                                <div className={`profile-pwd-fill ${pwdStrength}`} />
+                                                        <div className="mt-2.5 flex items-center justify-between gap-3">
+                                                            <div className="flex-1 h-1 bg-[#E8E4DC] relative">
+                                                                <div className={`h-full transition-all duration-300 ${
+                                                                    pwdStrength === 'strong' ? 'bg-emerald-600 w-full' :
+                                                                    pwdStrength === 'medium' ? 'bg-[#C9A87C] w-2/3' : 'bg-red-500 w-1/3'
+                                                                }`} />
                                                             </div>
-                                                            <span className="profile-pwd-label">{pwdStrengthLabel}</span>
+                                                            <span className={`text-[10px] uppercase tracking-wider font-bold ${
+                                                                pwdStrength === 'strong' ? 'text-emerald-600' :
+                                                                pwdStrength === 'medium' ? 'text-[#C9A87C]' : 'text-red-500'
+                                                            }`}>{pwdStrengthLabel}</span>
                                                         </div>
                                                     )}
                                                 </div>
 
-                                                <div className="form-group">
-                                                    <label>Xác nhận mật khẩu mới <span className="co-required">*</span></label>
-                                                    <div className="profile-input-wrap">
-                                                        <input
-                                                            type={showPwds.confirm ? 'text' : 'password'}
-                                                            className="profile-input"
-                                                            value={pwdForm.confirmPassword}
-                                                            onChange={e => setPwdForm(p => ({ ...p, confirmPassword: e.target.value }))}
-                                                            placeholder="Nhập lại mật khẩu mới"
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            className="profile-eye-btn"
-                                                            onClick={() => setShowPwds(p => ({ ...p, confirm: !p.confirm }))}
-                                                        >
-                                                            {showPwds.confirm ? '🙈' : '👁️'}
-                                                        </button>
-                                                    </div>
+                                                <div className="input-wrap">
+                                                    <input
+                                                        type={showPwds.confirm ? 'text' : 'password'}
+                                                        className="input-field pr-10 font-mono"
+                                                        placeholder=" "
+                                                        value={pwdForm.confirmPassword}
+                                                        onChange={e => setPwdForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                                                        required
+                                                    />
+                                                    <label className="floating-label">Xác nhận mật khẩu mới *</label>
+                                                    <button
+                                                        type="button"
+                                                        className="absolute right-0 bottom-2 text-[#8A8278] hover:text-[#0d0d0d] transition-colors cursor-pointer text-sm"
+                                                        onClick={() => setShowPwds(p => ({ ...p, confirm: !p.confirm }))}
+                                                    >
+                                                        {showPwds.confirm ? '🙈' : '👁️'}
+                                                    </button>
                                                     {pwdForm.confirmPassword && pwdForm.newPassword !== pwdForm.confirmPassword && (
-                                                        <span className="co-err-msg">Mật khẩu không khớp</span>
+                                                        <span className="text-red-500 text-[10px] mt-1.5 block">Xác nhận mật khẩu mới không trùng khớp</span>
                                                     )}
                                                 </div>
 
                                                 <button
-                                                    className="profile-btn-primary"
+                                                    className="w-full py-4 bg-[#0D0D0D] text-[#FDFBF7] font-semibold text-xs uppercase tracking-widest hover:bg-[#C9A87C] hover:text-[#0D0D0D] transition-colors cursor-pointer"
                                                     onClick={handleChangePassword}
                                                     disabled={pwdSaving}
                                                 >
-                                                    {pwdSaving ? 'Đang xử lý...' : '🔒 Đổi mật khẩu'}
+                                                    {pwdSaving ? 'Đang cập nhật...' : 'Đổi mật khẩu'}
                                                 </button>
                                             </div>
                                         </div>
@@ -460,120 +514,129 @@ export default function UserProfile() {
 
                                     {/* ── TAB: Change Contact ── */}
                                     {activeTab === 'contact' && (
-                                        <div className="profile-card">
-                                            <div className="profile-card-header">
-                                                <h2>📱 Đổi thông tin liên hệ</h2>
+                                        <div className="space-y-8">
+                                            <div className="pb-4 border-b border-[#E8E4DC]">
+                                                <h2 className="text-lg font-medium text-[#0D0D0D] uppercase tracking-wide">Đổi thông tin liên hệ</h2>
+                                                <p className="text-xs text-[#8A8278] mt-1">Để thay đổi email hoặc số điện thoại, bạn cần xác minh qua mã OTP 6 chữ số</p>
                                             </div>
 
-                                            {contactSuccess && <div className="profile-success">{contactSuccess}</div>}
-                                            {contactError && <div className="profile-error">{contactError}</div>}
-
-                                            <div className="profile-current-contact">
-                                                <div className="profile-contact-item">
-                                                    <span className="profile-contact-label">Email hiện tại</span>
-                                                    <span className="profile-contact-val">{profile?.email}</span>
+                                            {/* Current Contacts */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-[#F5F2EC]/40 border border-[#E8E4DC]">
+                                                <div className="space-y-1">
+                                                    <span className="text-[9px] uppercase tracking-wider text-[#8A8278] font-bold">Email hiện tại</span>
+                                                    <span className="block text-sm font-semibold text-[#0d0d0d]">{profile?.email}</span>
                                                 </div>
-                                                <div className="profile-contact-item">
-                                                    <span className="profile-contact-label">Số điện thoại hiện tại</span>
-                                                    <span className="profile-contact-val">
-                                                        {profile?.phoneNumber || <em className="profile-empty">Chưa có</em>}
+                                                <div className="space-y-1">
+                                                    <span className="text-[9px] uppercase tracking-wider text-[#8A8278] font-bold">Số điện thoại hiện tại</span>
+                                                    <span className="block text-sm font-semibold text-[#0d0d0d]">
+                                                        {profile?.phoneNumber || <em className="text-[#8A8278] not-italic font-normal">Chưa liên kết số điện thoại</em>}
                                                     </span>
                                                 </div>
                                             </div>
 
-                                            <div className="profile-form profile-form-narrow">
+                                            <div className="max-w-md space-y-6">
                                                 {!otpStep ? (
                                                     <>
-                                                        <div className="profile-contact-tabs">
+                                                        <div className="flex border border-[#E8E4DC] mb-6">
                                                             <button
-                                                                className={`profile-ctab${contactType === 'email' ? ' active' : ''}`}
-                                                                onClick={() => { setContactType('email'); setNewContactValue(''); setContactError(''); setContactSuccess(''); }}
+                                                                className={`w-1/2 py-3 text-[10px] uppercase font-bold tracking-wider cursor-pointer transition-all ${
+                                                                    contactType === 'email' ? 'bg-[#0D0D0D] text-[#FDFBF7]' : 'text-[#8A8278] hover:text-[#0D0D0D] hover:bg-[#F5F2EC]/40'
+                                                                }`}
+                                                                onClick={() => { setContactType('email'); setNewContactValue(''); }}
                                                             >
-                                                                📧 Đổi Email
+                                                                Đổi địa chỉ Email
                                                             </button>
                                                             <button
-                                                                className={`profile-ctab${contactType === 'phone' ? ' active' : ''}`}
-                                                                onClick={() => { setContactType('phone'); setNewContactValue(''); setContactError(''); setContactSuccess(''); }}
+                                                                className={`w-1/2 py-3 text-[10px] uppercase font-bold tracking-wider cursor-pointer transition-all ${
+                                                                    contactType === 'phone' ? 'bg-[#0D0D0D] text-[#FDFBF7]' : 'text-[#8A8278] hover:text-[#0D0D0D] hover:bg-[#F5F2EC]/40'
+                                                                }`}
+                                                                onClick={() => { setContactType('phone'); setNewContactValue(''); }}
                                                             >
-                                                                📱 Đổi Số điện thoại
+                                                                Đổi Số điện thoại
                                                             </button>
                                                         </div>
 
-                                                        <div className="form-group">
-                                                            <label>
-                                                                {contactType === 'email' ? 'Email mới' : 'Số điện thoại mới'}
-                                                                <span className="co-required"> *</span>
-                                                            </label>
+                                                        <div className="input-wrap">
                                                             <input
                                                                 type={contactType === 'email' ? 'email' : 'tel'}
-                                                                className="profile-input"
+                                                                className="input-field font-medium"
+                                                                placeholder=" "
                                                                 value={newContactValue}
                                                                 onChange={e => setNewContactValue(e.target.value)}
-                                                                placeholder={contactType === 'email' ? 'email@example.com' : '0901234567'}
+                                                                required
                                                             />
+                                                            <label className="floating-label">
+                                                                {contactType === 'email' ? 'Nhập Email mới *' : 'Nhập Số điện thoại mới *'}
+                                                            </label>
                                                         </div>
 
                                                         <button
-                                                            className="profile-btn-primary"
+                                                            className="w-full py-4 bg-[#0D0D0D] text-[#FDFBF7] font-semibold text-xs uppercase tracking-widest hover:bg-[#C9A87C] hover:text-[#0D0D0D] transition-colors cursor-pointer"
                                                             onClick={handleSendOtp}
                                                             disabled={contactSending}
                                                         >
-                                                            {contactSending ? 'Đang gửi...' : '📨 Gửi mã OTP'}
+                                                            {contactSending ? 'Đang gửi mã...' : 'Gửi mã xác nhận OTP'}
                                                         </button>
                                                     </>
                                                 ) : (
-                                                    <>
-
-                                                        <div className="form-group">
-                                                            <label>Nhập mã OTP (6 chữ số) <span className="co-required">*</span></label>
-                                                            <div className="verification-code-group">
-                                                                <div className="code-inputs">
-                                                                    {[0, 1, 2, 3, 4, 5].map(i => (
-                                                                        <input
-                                                                            key={i}
-                                                                            id={`potp-${i}`}
-                                                                            type="text"
-                                                                            inputMode="numeric"
-                                                                            maxLength="1"
-                                                                            className="code-input"
-                                                                            value={otpCode[i] || ''}
-                                                                            onChange={e => handleOtpInput(i, e.target.value)}
-                                                                            onKeyDown={e => handleOtpKeyDown(i, e)}
-                                                                        />
-                                                                    ))}
-                                                                </div>
-                                                            </div>
+                                                    <div className="space-y-6">
+                                                        <div className="space-y-1">
+                                                            <h4 className="text-[11px] uppercase tracking-wider font-bold text-[#0D0D0D]">Xác minh OTP</h4>
+                                                            <p className="text-xs text-[#8A8278]">Mã OTP 6 số đã được gửi đến <span className="font-semibold text-[#0d0d0d]">{newContactValue}</span></p>
                                                         </div>
 
-                                                        <div className="profile-otp-actions">
+                                                        {/* OTP Box Inputs */}
+                                                        <div className="flex justify-center gap-3 py-4">
+                                                            {[0, 1, 2, 3, 4, 5].map(i => (
+                                                                <input
+                                                                    key={i}
+                                                                    id={`potp-${i}`}
+                                                                    type="text"
+                                                                    inputMode="numeric"
+                                                                    maxLength="1"
+                                                                    className="w-12 h-14 text-center text-lg font-semibold bg-white border border-[#E8E4DC] focus:outline-none focus:border-[#0D0D0D] transition-colors"
+                                                                    value={otpCode[i] || ''}
+                                                                    onChange={e => handleOtpInput(i, e.target.value)}
+                                                                    onKeyDown={e => handleOtpKeyDown(i, e)}
+                                                                />
+                                                            ))}
+                                                        </div>
+
+                                                        {devOtp && (
+                                                            <div className="p-3 bg-[#FDF4E3] border border-[#E8D5BC] text-[#B27B13] text-[11px] tracking-wide font-mono text-center">
+                                                                [DEVELOPMENT ONLY] Mã OTP giả định là: <strong>{devOtp}</strong>
+                                                            </div>
+                                                        )}
+
+                                                        <div className="flex gap-4">
                                                             <button
-                                                                className="profile-btn-outline"
-                                                                onClick={() => { setOtpStep(false); setOtpCode(''); setDevOtp(''); setContactError(''); }}
+                                                                className="w-1/2 py-3.5 border border-[#0d0d0d] text-[#0d0d0d] hover:bg-[#F5F2EC] text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer text-center"
+                                                                onClick={() => { setOtpStep(false); setOtpCode(''); setDevOtp(''); }}
                                                             >
-                                                                ← Quay lại
+                                                                Quay lại
                                                             </button>
                                                             <button
-                                                                className="profile-btn-primary"
+                                                                className="w-1/2 py-3.5 bg-[#0D0D0D] text-[#FDFBF7] hover:bg-[#C9A87C] hover:text-[#0D0D0D] text-[10px] font-bold uppercase tracking-widest transition-all cursor-pointer text-center disabled:opacity-50"
                                                                 onClick={handleVerifyOtp}
-                                                                disabled={contactVerifying || !/^\d{6}$/.test(otpCode)}
+                                                                disabled={contactVerifying || otpCode.length < 6}
                                                             >
-                                                                {contactVerifying ? 'Đang xác nhận...' : '✅ Xác nhận OTP'}
+                                                                {contactVerifying ? 'Đang xác thực...' : 'Xác nhận OTP'}
                                                             </button>
                                                         </div>
 
                                                         <button
-                                                            className="profile-resend-btn"
+                                                            className="w-full text-center text-[10px] font-bold uppercase tracking-wider text-[#8A8278] hover:text-[#0D0D0D] transition-colors cursor-pointer mt-4"
                                                             onClick={handleSendOtp}
                                                             disabled={contactSending}
                                                         >
-                                                            {contactSending ? 'Đang gửi lại...' : '🔄 Gửi lại mã OTP'}
+                                                            {contactSending ? 'Đang gửi lại OTP...' : '🔄 Gửi lại mã OTP'}
                                                         </button>
-                                                    </>
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>
                                     )}
-                                </>
+                                </div>
                             )}
                         </div>
                     </div>

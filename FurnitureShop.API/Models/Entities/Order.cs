@@ -11,7 +11,10 @@ namespace FurnitureShop.API.Models
         Processing = 2,   // Đang xử lý
         Shipped = 3,      // Đang giao hàng
         Completed = 4,    // Hoàn thành
-        Cancelled = 5     // Đã hủy
+        Cancelled = 5,    // Đã hủy
+        Refunded = 6,     // Đã hoàn tiền (nếu thanh toán trước)
+        Returned = 7,     // Đã trả hàng
+        ReturnRequested = 8 // Yêu cầu trả hàng
     }
 
     // BUILDER PATTERN: Order phức tạp với nhiều thông tin
@@ -56,6 +59,12 @@ namespace FurnitureShop.API.Models
 
         [Column(TypeName = "decimal(18,2)")]
         public decimal ShippingFee { get; set; } = 0;
+
+        // Dịch vụ lắp đặt (Phase 2 - Nội thất)
+        public bool RequireInstallation { get; set; } = false;
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal InstallationFee { get; set; } = 0;
 
         // Tổng tiền
         [Column(TypeName = "decimal(18,2)")]

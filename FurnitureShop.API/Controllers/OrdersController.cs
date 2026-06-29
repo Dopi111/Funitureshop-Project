@@ -1,6 +1,7 @@
-﻿using FurnitureShop.API.Data;
+using FurnitureShop.API.Data;
 using FurnitureShop.API.DTOs;
 using FurnitureShop.API.Models;
+using FurnitureShop.API.Models.Entities;
 using FurnitureShop.API.Patterns.Command;
 using FurnitureShop.API.Patterns.Facade;
 using FurnitureShop.API.Patterns.Observer;
@@ -8,6 +9,7 @@ using FurnitureShop.API.Patterns.Singleton;
 using FurnitureShop.API.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 
 namespace FurnitureShop.API.Controllers
 {
@@ -86,6 +88,8 @@ namespace FurnitureShop.API.Controllers
                     o.ShippingWard,
                     o.SubTotal,
                     o.ShippingFee,
+                    o.RequireInstallation,
+                    o.InstallationFee,
                     o.TotalAmount,
                     o.PaymentMethod,
                     o.IsPaid,
@@ -284,7 +288,93 @@ namespace FurnitureShop.API.Controllers
             if (!success)
                 return BadRequest(new { error = "Không thể cập nhật địa chỉ (trạng thái không hợp lệ)" });
 
-            return Ok(new { success = true, message = "Địa chỉ giao hàng đã được cập nhật" });
+            return Ok(new { success = true, message = "Cập nhật địa chỉ giao hàng thành công" });
+        }
+
+        // POST: api/orders/{id}/request-return
+        [HttpPost("{id}/request-return")]
+        public async Task<IActionResult> RequestReturn(int id, [FromBody] TransitionRequest request)
+        {
+            var order = await _context.Orders.FirstOrDefaultAsync(o => o.OrderId == id);
+            if (order == null) return NotFound(new { success = false, message = "Không tìm thấy đơn hàng" });
+
+            if (order.Status != OrderStatus.Completed)
+                return BadRequest(new { success = false, message = "Chỉ có thể yêu cầu trả hàng đối với đơn hàng đã hoàn thành" });
+
+            order.Status = OrderStatus.ReturnRequested;
+            order.Notes = (order.Notes ?? "") + "\n[Yêu cầu trả hàng]: " + request.Notes;
+            order.UpdatedAt = DateTime.UtcNow;
+
+            var history = new OrderStatusHistory
+            {
+                OrderId = id,
+                FromStatus = OrderStatus.Completed,
+                ToStatus = OrderStatus.ReturnRequested,
+                Notes = request.Notes,
+                ChangedBy = request.ChangedBy ?? "User",
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.OrderStatusHistories.Add(history);
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { success = true, message = "Đã gửi yêu cầu trả hàng thành công" });
+        }
+
+        // POST: api/orders/{id}/approve-return
+        [Authorize(Roles = "Admin")]
+        [HttpPost("{id}/approve-return")]
+        public async Task<IActionResult> ApproveReturn(int id, [FromBody] TransitionRequest request)
+        {
+            var order = await _context.Orders
+                .Include(o => o.OrderDetails)
+                .FirstOrDefaultAsync(o => o.OrderId == id);
+                
+            if (order == null) return NotFound(new { success = false, message = "Không tìm thấy đơn hàng" });
+
+            if (order.Status != OrderStatus.ReturnRequested)
+                return BadRequest(new { success = false, message = "Đơn hàng chưa có yêu cầu trả hàng" });
+
+            order.Status = OrderStatus.Returned;
+            order.Notes = (order.Notes ?? "") + "\n[Đã duyệt trả hàng]: " + request.Notes;
+            order.UpdatedAt = DateTime.UtcNow;
+
+            var history = new OrderStatusHistory
+            {
+                OrderId = id,
+                FromStatus = OrderStatus.ReturnRequested,
+                ToStatus = OrderStatus.Returned,
+                Notes = request.Notes,
+                ChangedBy = request.ChangedBy ?? "Admin",
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.OrderStatusHistories.Add(history);
+
+            // Audit Log
+            var auditLog = new AuditLog
+            {
+                Action = "Approve Return",
+                EntityName = "Order",
+                EntityId = id,
+                Username = request.ChangedBy ?? "Admin",
+                Details = "Duyệt trả hàng đơn hàng #" + order.OrderNumber,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.AuditLogs.Add(auditLog);
+
+            // Cập nhật lại tồn kho
+            foreach (var detail in order.OrderDetails)
+            {
+                var product = await _context.Products.FirstOrDefaultAsync(p => p.ProductId == detail.ProductId);
+                if (product != null)
+                {
+                    product.StockQuantity += detail.Quantity;
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { success = true, message = "Đã phê duyệt trả hàng và hoàn lại tồn kho" });
         }
     }
 }

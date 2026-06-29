@@ -25,6 +25,24 @@ namespace FurnitureShop.API.Data
         public DbSet<ShoppingCart> ShoppingCarts { get; set; }
         public DbSet<CartItem> CartItems { get; set; }
 
+        // Phase 2: Inventory & Variants
+        public DbSet<ProductVariant> ProductVariants { get; set; }
+        public DbSet<Supplier> Suppliers { get; set; }
+        public DbSet<PurchaseOrder> PurchaseOrders { get; set; }
+        public DbSet<PurchaseOrderDetail> PurchaseOrderDetails { get; set; }
+
+        // ===== PRODUCT VIEW LOG =====
+        public DbSet<ProductView> ProductViews { get; set; }
+
+        // Phase 2: Marketing
+        public DbSet<Coupon> Coupons { get; set; }
+
+        // Phase 3: RBAC
+        public DbSet<AuditLog> AuditLogs { get; set; }
+
+        // Phase 5: System Settings
+        public DbSet<SystemSetting> SystemSettings { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -63,6 +81,46 @@ namespace FurnitureShop.API.Data
                 .HasForeignKey(pi => pi.ProductId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // ProductVariant
+            modelBuilder.Entity<ProductVariant>()
+                .HasOne(pv => pv.Product)
+                .WithMany()
+                .HasForeignKey(pv => pv.ProductId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // PurchaseOrder -> Supplier
+            modelBuilder.Entity<PurchaseOrder>()
+                .HasOne(po => po.Supplier)
+                .WithMany()
+                .HasForeignKey(po => po.SupplierId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // PurchaseOrder -> User (CreatedBy)
+            modelBuilder.Entity<PurchaseOrder>()
+                .HasOne(po => po.CreatedBy)
+                .WithMany()
+                .HasForeignKey(po => po.CreatedById)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // PurchaseOrderDetail
+            modelBuilder.Entity<PurchaseOrderDetail>()
+                .HasOne(pod => pod.PurchaseOrder)
+                .WithMany(po => po.Details)
+                .HasForeignKey(pod => pod.PurchaseOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<PurchaseOrderDetail>()
+                .HasOne(pod => pod.Product)
+                .WithMany()
+                .HasForeignKey(pod => pod.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<PurchaseOrderDetail>()
+                .HasOne(pod => pod.Variant)
+                .WithMany()
+                .HasForeignKey(pod => pod.VariantId)
+                .OnDelete(DeleteBehavior.Restrict);
+
             // Order relationships
             modelBuilder.Entity<Order>()
                 .HasOne(o => o.User)
@@ -88,6 +146,16 @@ namespace FurnitureShop.API.Data
                 .WithMany(p => p.OrderDetails)
                 .HasForeignKey(od => od.ProductId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Seeding SystemSettings
+            var fixedDate = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            modelBuilder.Entity<SystemSetting>().HasData(
+                new SystemSetting { Key = "StoreName", Value = "FurnitureShop", Description = "Tên cửa hàng", UpdatedAt = fixedDate },
+                new SystemSetting { Key = "Hotline", Value = "1900 1234", Description = "Số điện thoại CSKH", UpdatedAt = fixedDate },
+                new SystemSetting { Key = "Address", Value = "123 Quận 1, TP.HCM", Description = "Địa chỉ Showroom", UpdatedAt = fixedDate },
+                new SystemSetting { Key = "BannerUrl", Value = "https://example.com/banner.jpg", Description = "Banner Trang chủ", UpdatedAt = fixedDate },
+                new SystemSetting { Key = "ReturnPolicyDays", Value = "7", Description = "Số ngày cho phép trả hàng", UpdatedAt = fixedDate }
+            );
 
             // OrderStatusHistory
             modelBuilder.Entity<OrderStatusHistory>()
@@ -131,6 +199,78 @@ namespace FurnitureShop.API.Data
 
             modelBuilder.Entity<Product>()
                 .HasIndex(p => p.SKU);
+
+            // ====== INDEX BỔ SUNG ĐỂ TỐI ƯU FILTER ======
+            // Composite index cho query phổ biến nhất: lọc danh mục + active + sắp xếp mới nhất
+            modelBuilder.Entity<Product>()
+                .HasIndex(p => new { p.CategoryId, p.IsActive, p.CreatedAt })
+                .HasDatabaseName("IX_Products_CategoryId_IsActive_CreatedAt");
+
+            // Index cho lọc theo ProductType (bộ lọc loại sản phẩm)
+            modelBuilder.Entity<Product>()
+                .HasIndex(p => p.ProductType)
+                .HasDatabaseName("IX_Products_ProductType");
+
+            // Index cho lọc sản phẩm nổi bật
+            modelBuilder.Entity<Product>()
+                .HasIndex(p => p.IsFeatured)
+                .HasDatabaseName("IX_Products_IsFeatured");
+
+            // Index cho lọc theo giá (price range filter)
+            modelBuilder.Entity<Product>()
+                .HasIndex(p => p.BasePrice)
+                .HasDatabaseName("IX_Products_BasePrice");
+
+            // Index cho lọc theo chất liệu
+            modelBuilder.Entity<Product>()
+                .HasIndex(p => p.Material)
+                .HasDatabaseName("IX_Products_Material");
+
+            // Index cho query đơn hàng theo user (GetUserOrders)
+            modelBuilder.Entity<Order>()
+                .HasIndex(o => o.UserId)
+                .HasDatabaseName("IX_Orders_UserId");
+
+            // Index cho lọc đơn hàng theo trạng thái (Admin dashboard)
+            modelBuilder.Entity<Order>()
+                .HasIndex(o => o.Status)
+                .HasDatabaseName("IX_Orders_Status");
+
+            // Index cho OrderDetail theo Product (báo cáo bán hàng)
+            modelBuilder.Entity<OrderDetail>()
+                .HasIndex(od => od.ProductId)
+                .HasDatabaseName("IX_OrderDetails_ProductId");
+            // ====== KẾT THÚC INDEX BỔ SUNG ======
+
+            // ====== PRODUCT VIEW LOG - FLUENT API ======
+
+            // FK: ProductView → Product (Restrict để không xóa cascade log khi xóa sản phẩm)
+            modelBuilder.Entity<ProductView>()
+                .HasOne(pv => pv.Product)
+                .WithMany()
+                .HasForeignKey(pv => pv.ProductId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // INDEX 1: Composite (ProductId, ViewedAt) — QUAN TRỌNG NHẤT
+            // Tối ưu cho query thống kê: "Top 10 sản phẩm được xem nhiều nhất trong N ngày qua"
+            // SQL tương đương: WHERE ViewedAt >= @cutoff GROUP BY ProductId ORDER BY COUNT(*) DESC
+            modelBuilder.Entity<ProductView>()
+                .HasIndex(pv => new { pv.ProductId, pv.ViewedAt })
+                .HasDatabaseName("IX_ProductViews_ProductId_ViewedAt");
+
+            // INDEX 2: ViewedAt đơn — tối ưu khi query theo khoảng thời gian toàn bảng
+            // Ví dụ: DELETE log cũ hơn 90 ngày, hoặc report theo ngày/tháng
+            modelBuilder.Entity<ProductView>()
+                .HasIndex(pv => pv.ViewedAt)
+                .HasDatabaseName("IX_ProductViews_ViewedAt");
+
+            // INDEX 3: UserId — tra cứu lịch sử xem của một user cụ thể (nullable filtered index)
+            // Filtered index chỉ đánh index các row có UserId NOT NULL, tiết kiệm không gian
+            modelBuilder.Entity<ProductView>()
+                .HasIndex(pv => pv.UserId)
+                .HasFilter("[UserId] IS NOT NULL")
+                .HasDatabaseName("IX_ProductViews_UserId_Filtered");
+            // ====== KẾT THÚC PRODUCT VIEW ======
 
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Email)

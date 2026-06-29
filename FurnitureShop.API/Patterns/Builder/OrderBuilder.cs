@@ -113,6 +113,13 @@ namespace FurnitureShop.API.Patterns.Builder
             return this;
         }
 
+        public OrderBuilder WithInstallation(bool requireInstallation, decimal installationFee)
+        {
+            _order.RequireInstallation = requireInstallation;
+            _order.InstallationFee = requireInstallation ? installationFee : 0;
+            return this;
+        }
+
         public OrderBuilder MarkAsPaid(DateTime? paidAt = null)
         {
             _order.IsPaid = true;
@@ -139,7 +146,7 @@ namespace FurnitureShop.API.Patterns.Builder
 
             // Calculate totals
             _order.SubTotal = _orderDetails.Sum(od => od.TotalPrice);
-            _order.TotalAmount = _order.SubTotal + _taxAmount + _order.ShippingFee;
+            _order.TotalAmount = _order.SubTotal + _taxAmount + _order.ShippingFee + _order.InstallationFee;
 
             // Add order details
             foreach (var detail in _orderDetails)
@@ -194,6 +201,8 @@ namespace FurnitureShop.API.DTOs
         public string PaymentMethod { get; set; } = "COD";
         
         public string? Notes { get; set; }
+        
+        public bool RequireInstallation { get; set; } = false;
     }
 
     public class ShippingInfoDto
