@@ -1,0 +1,14 @@
+﻿.env
+.vs/
+.vscode/
+**/bin/
+**/obj/
+**/.vs/
+node_modules/
+dist/
+dist-ssr/
+*.log
+patch.diff
+patch.txt
+chatbot_prompt_for_opus.md
+repo-sync/
