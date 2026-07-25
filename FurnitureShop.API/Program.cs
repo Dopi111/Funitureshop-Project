@@ -6,7 +6,9 @@ using FurnitureShop.API.Patterns.Facade;
 using FurnitureShop.API.Patterns.Factory;
 using FurnitureShop.API.Patterns.Repository.Contracts;
 using FurnitureShop.API.Patterns.Repository.Implementations;
+using FurnitureShop.API.Patterns.Proxy;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using System.Threading.Channels;
@@ -36,7 +38,7 @@ builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
 // SCOPED PATTERN: DbContext và Services
 builder.Services.AddScoped<IInventoryService, InventoryService>();
-builder.Services.AddScoped<ProductService>();
+builder.Services.AddScoped<FurnitureShop.API.Services.ProductService>();
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<CategoryService>();
 builder.Services.AddScoped<StatisticsService>();
@@ -55,6 +57,23 @@ builder.Services.AddSingleton<FurnitureShop.API.Patterns.Command.OrderCommandInv
 
 // FACTORY PATTERN: Product Factory
 builder.Services.AddSingleton<ProductFactory>();
+
+// PROXY PATTERN: ProductServiceProxy — Caching Layer đứng trước ProductService thật
+// Controller inject IProductService → Nhận ProductServiceProxy (không biết đây là Proxy)
+// ProductServiceProxy nội bộ dùng ProductService thật qua Factory Lambda
+builder.Services.AddScoped<IProductService>(sp =>
+{
+    var realService = new FurnitureShop.API.Patterns.Proxy.ProductService(
+        sp.GetRequiredService<IProductRepository>(),
+        sp.GetRequiredService<ILogger<FurnitureShop.API.Patterns.Proxy.ProductService>>()
+    );
+    return new ProductServiceProxy(
+        realService,
+        sp.GetRequiredService<IMemoryCache>(),
+        sp.GetRequiredService<ILogger<ProductServiceProxy>>()
+    );
+});
+
 
 // ========== PRODUCT VIEW TRACKING (Channel + BackgroundService) ==========
 // BoundedChannel: back-pressure an toàn, capacity 5000 events

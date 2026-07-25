@@ -2,6 +2,7 @@ using FurnitureShop.API.Data;
 using FurnitureShop.API.DTOs;
 using FurnitureShop.API.Patterns.Decorator;
 using FurnitureShop.API.Patterns.Factory;
+using FurnitureShop.API.Patterns.Prototype;
 using FurnitureShop.API.Patterns.Singleton;
 using FurnitureShop.API.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -781,7 +782,69 @@ namespace FurnitureShop.API.Controllers
 
             return slug;
         }
+
+        // =====================================================================
+        // PROTOTYPE PATTERN: Nhân bản sản phẩm nội thất
+        // POST: api/products/{id}/clone
+        // =====================================================================
+        /// <summary>
+        /// Clone sản phẩm bằng Prototype Pattern.
+        /// Admin chỉ cần truyền ID sản phẩm gốc và các thông tin muốn thay đổi.
+        /// Hệ thống tự động sao chép (Deep Clone) toàn bộ thông tin còn lại.
+        /// </summary>
+        [Authorize(Roles = "Admin")]
+        [HttpPost("{id:int}/clone")]
+        public async Task<IActionResult> CloneProduct(int id, [FromBody] CloneProductRequest? request)
+        {
+            // 1. Tìm sản phẩm gốc cần clone
+            var sourceProduct = await _context.Products
+                .Include(p => p.Images)
+                .FirstOrDefaultAsync(p => p.ProductId == id);
+
+            if (sourceProduct == null)
+                return NotFound(new { success = false, message = $"Không tìm thấy sản phẩm ID={id} để nhân bản." });
+
+            // 2. PROTOTYPE PATTERN: Tạo snapshot từ sản phẩm gốc
+            var snapshot = ProductSnapshot.FromProduct(sourceProduct);
+
+            // 3. Clone snapshot → Tạo bản sao độc lập
+            var cloned = snapshot.Clone();
+
+            // 4. Ghi đè các thông tin Admin muốn thay đổi (nếu có)
+            if (!string.IsNullOrWhiteSpace(request?.NewName))
+                cloned.Name = request.NewName;
+
+            if (request?.NewBasePrice.HasValue == true && request.NewBasePrice > 0)
+                cloned.BasePrice = request.NewBasePrice.Value;
+
+            if (!string.IsNullOrWhiteSpace(request?.NewColor))
+                cloned.Color = request.NewColor;
+
+            // 5. Chuyển snapshot → Product Entity và lưu vào DB
+            var newProduct = cloned.ToProduct();
+            newProduct.Slug = GenerateSlug(newProduct.Name);
+
+            _context.Products.Add(newProduct);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInfo($"[Prototype] Admin đã nhân bản sản phẩm ID={id} → Sản phẩm mới ID={newProduct.ProductId}: '{newProduct.Name}'");
+
+            return Ok(new
+            {
+                success = true,
+                message = $"Nhân bản sản phẩm thành công!",
+                data = new
+                {
+                    newProductId = newProduct.ProductId,
+                    newProductName = newProduct.Name,
+                    clonedFromProductId = id,
+                    clonedFromProductName = sourceProduct.Name,
+                    note = "Sản phẩm mới đang ở trạng thái ẨN (IsActive=false). Vui lòng kiểm tra và kích hoạt."
+                }
+            });
+        }
     }
+
 
     // Request DTOs
     public class CreateProductRequest
@@ -829,5 +892,12 @@ namespace FurnitureShop.API.Controllers
         public bool IsActive { get; set; } = true;
         public bool IsFeatured { get; set; } = false;
         public string? ImageUrl { get; set; }
+    }
+
+    public class CloneProductRequest
+    {
+        public string? NewName { get; set; }
+        public decimal? NewBasePrice { get; set; }
+        public string? NewColor { get; set; }
     }
 }
