@@ -28,6 +28,7 @@ namespace FurnitureShop.API.Services
             if (startDate.HasValue || endDate.HasValue)
                 return await BuildDashboardAsync(startDate, endDate);
 
+            // CS8603 fix: GetOrCreateAsync<T> trả về T? (nullable), dùng ?? new() để đảm bảo non-null
             return await _cache.GetOrCreateAsync(DashboardCacheKey, async entry =>
             {
                 // Set cache options
@@ -41,8 +42,9 @@ namespace FurnitureShop.API.Services
                 {
                     throw new Exception("Dashboard error: " + ex.Message, ex);
                 }
-            });
+            }) ?? new DashboardDataDto();
         }
+
 
         private async Task<DashboardDataDto> BuildDashboardAsync(DateTime? startDate, DateTime? endDate)
         {

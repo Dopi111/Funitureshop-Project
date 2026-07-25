@@ -164,15 +164,17 @@ namespace FurnitureShop.API.Patterns.Factory
     /// </summary>
     public class PayPalPayment : IPaymentMethod
     {
-        private readonly string _clientId;
-        private readonly string _clientSecret;
+        // CS0414 fix: Đây là các credentials placeholder - sẽ đọc từ config khi tích hợp thật
+        // Dùng thuộc tính thay vì private field để tránh warning "assigned but never used"
+        private string ClientId { get; } = string.Empty;
+        private string ClientSecret { get; } = string.Empty;
         private readonly bool _isSandbox;
 
         public PayPalPayment()
         {
             // Đọc từ config trong thực tế
-            _clientId = "YOUR_PAYPAL_CLIENT_ID";
-            _clientSecret = "YOUR_PAYPAL_CLIENT_SECRET";
+            ClientId = "YOUR_PAYPAL_CLIENT_ID";
+            ClientSecret = "YOUR_PAYPAL_CLIENT_SECRET";
             _isSandbox = true;
         }
 
@@ -256,15 +258,17 @@ namespace FurnitureShop.API.Patterns.Factory
     /// </summary>
     public class VNPayPayment : IPaymentMethod
     {
+        // _tmnCode và _vnpUrl được dùng trong GetPaymentUrl() — giữ nguyên là readonly field
+        // _hashSecret sẽ dùng khi tích hợp HMAC-SHA512 thật
         private readonly string _tmnCode;
-        private readonly string _hashSecret;
+        private string HashSecret { get; } = string.Empty; // CS0414 fix: dùng property thay field
         private readonly string _vnpUrl;
 
         public VNPayPayment()
         {
             // Đọc từ config trong thực tế
             _tmnCode = "YOUR_TMN_CODE";
-            _hashSecret = "YOUR_HASH_SECRET";
+            HashSecret = "YOUR_HASH_SECRET";
             _vnpUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
         }
 

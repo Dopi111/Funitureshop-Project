@@ -9,8 +9,8 @@ namespace FurnitureShop.API.DTOs
         public int TotalOrders { get; set; }
         public int CompletedOrders { get; set; }
         public decimal TotalRevenue { get; set; }
-        public decimal? TotalCost { get; set; } // Null khi sản phẩm bán ra chưa có giá vốn
-        public decimal? GrossProfit { get; set; } // Null khi chưa đủ dữ liệu giá vốn
+        public decimal? TotalCost { get; set; }     // Null khi sản phẩm bán ra chưa có giá vốn
+        public decimal? GrossProfit { get; set; }   // Null khi chưa đủ dữ liệu giá vốn
         public int TotalCustomers { get; set; }
         public int TotalProducts { get; set; }
         public decimal AverageOrderValue { get; set; }
@@ -20,7 +20,8 @@ namespace FurnitureShop.API.DTOs
     // Order Status Distribution
     public class OrderStatusDistributionDto
     {
-        public string Status { get; set; }
+        // CS8618 fix: khởi tạo giá trị mặc định để tránh null
+        public string Status { get; set; } = string.Empty;
         public int Count { get; set; }
         public decimal Percentage { get; set; }
     }
@@ -37,7 +38,8 @@ namespace FurnitureShop.API.DTOs
     public class TopProductDto
     {
         public int ProductId { get; set; }
-        public string ProductName { get; set; }
+        // CS8618 fix: khởi tạo giá trị mặc định
+        public string ProductName { get; set; } = string.Empty;
         public int QuantitySold { get; set; }
         public decimal Revenue { get; set; }
     }
@@ -46,7 +48,8 @@ namespace FurnitureShop.API.DTOs
     public class CategoryPerformanceDto
     {
         public int CategoryId { get; set; }
-        public string CategoryName { get; set; }
+        // CS8618 fix: khởi tạo giá trị mặc định
+        public string CategoryName { get; set; } = string.Empty;
         public int ProductCount { get; set; }
         public decimal TotalSales { get; set; }
         public decimal AveragePrice { get; set; }
@@ -56,7 +59,8 @@ namespace FurnitureShop.API.DTOs
     // Product Type Statistics
     public class ProductTypeStatisticsDto
     {
-        public string ProductType { get; set; }
+        // CS8618 fix: khởi tạo giá trị mặc định
+        public string ProductType { get; set; } = string.Empty;
         public int Count { get; set; }
         public decimal MinPrice { get; set; }
         public decimal MaxPrice { get; set; }
@@ -67,7 +71,8 @@ namespace FurnitureShop.API.DTOs
     // Shipping Method Usage
     public class ShippingMethodUsageDto
     {
-        public string ShippingMethodName { get; set; }
+        // CS8618 fix: khởi tạo giá trị mặc định
+        public string ShippingMethodName { get; set; } = string.Empty;
         public int UsageCount { get; set; }
         public decimal TotalShippingFees { get; set; }
         public decimal AverageShippingFee { get; set; }
@@ -118,19 +123,20 @@ namespace FurnitureShop.API.DTOs
     }
 
     // Complete Dashboard Data
+    // CS8618 fix: khởi tạo tất cả thuộc tính non-nullable với giá trị mặc định
     public class DashboardDataDto
     {
-        public DashboardSummaryDto Summary { get; set; }
-        public List<OrderStatusDistributionDto> OrderStatusDistribution { get; set; }
-        public List<RevenueByDateDto> RevenueByDate { get; set; }
-        public List<TopProductDto> TopProducts { get; set; }
-        public List<CategoryPerformanceDto> CategoryPerformance { get; set; }
-        public List<ProductTypeStatisticsDto> ProductTypes { get; set; }
-        public List<ShippingMethodUsageDto> ShippingMethods { get; set; }
-        public UserActivityDto UserActivity { get; set; }
-        public InventoryStatusDto InventoryStatus { get; set; }
-        public OrderCompletionStatsDto OrderCompletion { get; set; }
-        public List<MonthlySalesDto> MonthlySales { get; set; }
+        public DashboardSummaryDto Summary { get; set; } = new();
+        public List<OrderStatusDistributionDto> OrderStatusDistribution { get; set; } = new();
+        public List<RevenueByDateDto> RevenueByDate { get; set; } = new();
+        public List<TopProductDto> TopProducts { get; set; } = new();
+        public List<CategoryPerformanceDto> CategoryPerformance { get; set; } = new();
+        public List<ProductTypeStatisticsDto> ProductTypes { get; set; } = new();
+        public List<ShippingMethodUsageDto> ShippingMethods { get; set; } = new();
+        public UserActivityDto UserActivity { get; set; } = new();
+        public InventoryStatusDto InventoryStatus { get; set; } = new();
+        public OrderCompletionStatsDto OrderCompletion { get; set; } = new();
+        public List<MonthlySalesDto> MonthlySales { get; set; } = new();
         public List<RecentOrderDto> RecentOrders { get; set; } = new();
         public decimal? TargetRevenue { get; set; }
     }
