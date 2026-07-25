@@ -88,6 +88,7 @@ const ProductsPage = () => {
     const [depthMin, setDepthMin] = useState(searchParams.get('minDepth') || '');
     const [depthMax, setDepthMax] = useState(searchParams.get('maxDepth') || '');
 
+    // [LUỒNG TÌM KIẾM - TRANG SẢN PHẨM] Đọc từ khóa tìm kiếm 'search' từ tham số URL
     const selectedCategory = searchParams.get('categoryId') || '';
     const selectedProductType = searchParams.get('productType') || '';
     const sortBy = searchParams.get('sortBy') || 'newest';
@@ -120,7 +121,7 @@ const ProductsPage = () => {
         };
     }, [isDrawerOpen]);
 
-    // Sync state with URL search param
+    // Đồng bộ từ khóa tìm kiếm khi URL thay đổi
     useEffect(() => {
         setSearchVal(urlSearch);
     }, [urlSearch]);
@@ -141,7 +142,7 @@ const ProductsPage = () => {
         setDepthMax(urlMaxDepth);
     }, [urlMinWidth, urlMaxWidth, urlMinHeight, urlMaxHeight, urlMinDepth, urlMaxDepth]);
 
-    // Custom debounce
+    // Helper: Simple debounce function
     const debounce = (func, delay) => {
         let timer;
         return (...args) => {
@@ -152,7 +153,8 @@ const ProductsPage = () => {
         };
     };
 
-    // Debounced search logic (400ms)
+    // [LUỒNG TÌM KIẾM - DEBOUNCE O TÌM KIẾM SẢN PHẨM] 
+    // Trì hoãn 400ms trước khi ghi tham số search lên URL
     const debouncedSetSearchParams = useCallback(
         debounce((value) => {
             const params = {};
@@ -197,24 +199,16 @@ const ProductsPage = () => {
             if (selectedMaterial) params.material = selectedMaterial;
             if (urlSearch) params.search = urlSearch;
 
-            // Merge current URL params with newly changed dimensions
-            const minW = newParams.minWidth !== undefined ? newParams.minWidth : urlMinWidth;
-            const maxW = newParams.maxWidth !== undefined ? newParams.maxWidth : urlMaxWidth;
-            const minH = newParams.minHeight !== undefined ? newParams.minHeight : urlMinHeight;
-            const maxH = newParams.maxHeight !== undefined ? newParams.maxHeight : urlMaxHeight;
-            const minD = newParams.minDepth !== undefined ? newParams.minDepth : urlMinDepth;
-            const maxD = newParams.maxDepth !== undefined ? newParams.maxDepth : urlMaxDepth;
-
-            if (minW) params.minWidth = minW;
-            if (maxW) params.maxWidth = maxW;
-            if (minH) params.minHeight = minH;
-            if (maxH) params.maxHeight = maxH;
-            if (minD) params.minDepth = minD;
-            if (maxD) params.maxDepth = maxD;
+            if (newParams.minWidth) params.minWidth = newParams.minWidth;
+            if (newParams.maxWidth) params.maxWidth = newParams.maxWidth;
+            if (newParams.minHeight) params.minHeight = newParams.minHeight;
+            if (newParams.maxHeight) params.maxHeight = newParams.maxHeight;
+            if (newParams.minDepth) params.minDepth = newParams.minDepth;
+            if (newParams.maxDepth) params.maxDepth = newParams.maxDepth;
 
             setSearchParams(params);
         }, 300),
-        [selectedCategory, selectedProductType, sortBy, urlMinPrice, urlMaxPrice, selectedColor, selectedMaterial, urlSearch, urlMinWidth, urlMaxWidth, urlMinHeight, urlMaxHeight, urlMinDepth, urlMaxDepth, setSearchParams]
+        [selectedCategory, selectedProductType, sortBy, urlMinPrice, urlMaxPrice, selectedColor, selectedMaterial, urlSearch, setSearchParams]
     );
 
     const handleDimensionChange = (key, val) => {
@@ -228,38 +222,43 @@ const ProductsPage = () => {
         debouncedApplyDimensions({ [key]: val });
     };
 
-    // Fetch initial filter lists
+    // Filter Fetch Data
     useEffect(() => {
-        if (!isFeaturedPage) {
-            // Fetch root categories
-            fetch('/api/categories/all')
-                .then(r => r.json())
-                .then(data => setCategories((data || []).filter(c => c.isActive && !c.parentId)))
-                .catch(() => {});
+        const fetchFilterOptions = async () => {
+            try {
+                const [catRes, prodTypesRes, colorRes, matRes] = await Promise.all([
+                    fetch('/api/categories/all'),
+                    fetch('/api/products/product-types'),
+                    fetch('/api/products/colors'),
+                    fetch('/api/products/materials')
+                ]);
 
-            // Fetch product types
-            fetch('/api/product-types/stats')
-                .then(r => r.json())
-                .then(res => {
-                    if (res.success) setProductTypes(res.data || []);
-                })
-                .catch(() => {});
+                if (catRes.ok) {
+                    const data = await catRes.json();
+                    setCategories(Array.isArray(data) ? data : []);
+                }
+                if (prodTypesRes.ok) {
+                    const data = await prodTypesRes.json();
+                    setProductTypes(Array.isArray(data) ? data : []);
+                }
+                if (colorRes.ok) {
+                    const data = await colorRes.json();
+                    setColors(Array.isArray(data) ? data : []);
+                }
+                if (matRes.ok) {
+                    const data = await matRes.json();
+                    setMaterials(Array.isArray(data) ? data : []);
+                }
+            } catch (err) {
+                console.error('Error fetching filter options:', err);
+            }
+        };
 
-            // Fetch unique colors
-            fetch('/api/products/colors')
-                .then(r => r.json())
-                .then(data => setColors(data || []))
-                .catch(() => {});
+        fetchFilterOptions();
+    }, []);
 
-            // Fetch unique materials
-            fetch('/api/products/materials')
-                .then(r => r.json())
-                .then(data => setMaterials(data || []))
-                .catch(() => {});
-        }
-    }, [isFeaturedPage]);
-
-    // Fetch products
+    // [LUỒNG TÌM KIẾM - GỌI API BACKEND] 
+    // Hàm gửi request GET /api/products kèm tham số search để lấy dữ liệu sản phẩm đã lọc
     const fetchProducts = useCallback(async (
         page = 1,
         catId = selectedCategory,
@@ -289,7 +288,7 @@ const ProductsPage = () => {
                 if (maxP) params.append('maxPrice', maxP);
                 if (colorVal) params.append('color', colorVal);
                 if (materialVal) params.append('material', materialVal);
-                if (searchValStr) params.append('search', searchValStr);
+                if (searchValStr) params.append('search', searchValStr); // Truyền từ khóa tìm kiếm lên backend
 
                 // Kích thước
                 if (minW) params.append('minWidth', minW);

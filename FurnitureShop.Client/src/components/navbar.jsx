@@ -23,19 +23,20 @@ const Navbar = () => {
     const wishlistCount = wishlist?.length || 0;
     const navigate = useNavigate();
 
+    // State điều khiển ẩn/hợp khung tìm kiếm và từ khóa tìm kiếm
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [isMegaMenuOpen, setIsMegaMenuOpen] = useState(false);
     const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
 
-    // Autocomplete suggest states
+    // State lưu danh sách gợi ý tự động (Autocomplete) bao gồm danh mục & sản phẩm
     const [isSuggestOpen, setIsSuggestOpen] = useState(false);
     const [suggestions, setSuggestions] = useState({ categories: [], products: [] });
     const megaMenuTimeout = useRef(null);
-    const searchRef = useRef(null);
+    const searchRef = useRef(null); // Ref dùng để phát hiện sự kiện nhấp chuột ra ngoài ô tìm kiếm
     const userMenuRef = useRef(null);
 
-    // Fetch all categories on mount
+    // Fetch tất cả danh mục khi component được mount
     useEffect(() => {
         fetch('/api/categories/all')
             .then(res => res.json())
@@ -47,7 +48,7 @@ const Navbar = () => {
                 setCategories(roots);
             })
             .catch(() => {
-                // Fallback elegant category list
+                // Danh sách danh mục dự phòng nếu API gặp lỗi
                 const mockCats = [
                     { categoryId: 'living', name: 'Phòng Khách', isActive: true, parentId: null },
                     { categoryId: 'bedroom', name: 'Phòng Ngủ', isActive: true, parentId: null },
@@ -59,14 +60,17 @@ const Navbar = () => {
             });
     }, []);
 
-    // Autocomplete suggest fetch with debounce
+    // [LUỒNG TÌM KIẾM GỢI Ý - AUTOCOMPLETE SUGGEST]
+    // Tự động gọi API gợi ý khi khách nhập từ 2 ký tự trở lên (Áp dụng Debounce 300ms)
     useEffect(() => {
+        // Nếu từ khóa quá ngắn (< 2 ký tự), xóa kết quả gợi ý và đóng menu
         if (searchQuery.trim().length < 2) {
             setSuggestions({ categories: [], products: [] });
             setIsSuggestOpen(false);
             return;
         }
 
+        // Tạo timer trì hoãn 300ms tránh gọi API dồn dập khi khách đang gõ
         const timer = setTimeout(() => {
             fetch(`/api/products/suggest?keyword=${encodeURIComponent(searchQuery.trim())}`)
                 .then(res => res.json())
@@ -77,17 +81,18 @@ const Navbar = () => {
                         categories: Array.isArray(rawCategories) ? rawCategories : [],
                         products: Array.isArray(rawProducts) ? rawProducts : []
                     });
-                    setIsSuggestOpen(true);
+                    setIsSuggestOpen(true); // Hiển thị popup gợi ý
                 })
                 .catch(() => {
                     setSuggestions({ categories: [], products: [] });
                 });
         }, 300);
 
+        // Hủy timer cũ nếu người dùng tiếp tục gõ trước khi hết 300ms
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    // Click outside handler for search and user dropdown
+    // Lắng nghe sự kiện nhấp chuột ra ngoài (Click Outside) để đóng popup tìm kiếm
     useEffect(() => {
         const handleClickOutside = (e) => {
             if (searchRef.current && !searchRef.current.contains(e.target)) {
@@ -107,6 +112,8 @@ const Navbar = () => {
         window.location.href = '/';
     };
 
+    // [LUỒNG TÌM KIẾM ĐẦY ĐỦ - SUBMIT FORM]
+    // Khi khách nhấn Enter hoặc submit ô tìm kiếm -> Chuyển hướng sang trang danh sách sản phẩm với tham số query search
     const handleSearchSubmit = (e) => {
         e.preventDefault();
         if (searchQuery.trim()) {

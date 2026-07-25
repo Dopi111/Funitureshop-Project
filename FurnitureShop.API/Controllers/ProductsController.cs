@@ -103,12 +103,15 @@ namespace FurnitureShop.API.Controllers
             if (maxDepth.HasValue)
                 query = query.Where(p => p.Depth <= maxDepth.Value);
 
-            // Tìm kiếm text (tên, mô tả, thương hiệu)
-            if (!string.IsNullOrEmpty(search))
+            // [LUỒNG TÌM KIẾM CHÍNH - BE] Tìm kiếm từ khóa theo Tên sản phẩm, Mô tả hoặc Thương hiệu (Hỗ trợ tiếng Việt KHÔNG DẤU & CÓ DẤU)
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var cleanSearch = search.Trim();
                 query = query.Where(p =>
-                    p.Name.Contains(search) ||
-                    (p.Description != null && p.Description.Contains(search)) ||
-                    (p.Brand != null && p.Brand.Contains(search)));
+                    EF.Functions.Like(EF.Functions.Collate(p.Name, "SQL_Latin1_General_CP1_CI_AI"), $"%{cleanSearch}%") ||
+                    (p.Description != null && EF.Functions.Like(EF.Functions.Collate(p.Description, "SQL_Latin1_General_CP1_CI_AI"), $"%{cleanSearch}%")) ||
+                    (p.Brand != null && EF.Functions.Like(EF.Functions.Collate(p.Brand, "SQL_Latin1_General_CP1_CI_AI"), $"%{cleanSearch}%")));
+            }
 
             // Sắp xếp
             query = sortBy switch
@@ -167,21 +170,28 @@ namespace FurnitureShop.API.Controllers
             return result;
         }
 
+        /// <summary>
+        /// [LUỒNG TÌM KIẾM GỢI Ý - AUTOCOMPLETE API]
+        /// API trả về danh sách gợi ý nhanh danh mục (tối đa 3) và sản phẩm (tối đa 5) khớp từ khóa cho Header Navbar.
+        /// Hỗ trợ tìm kiếm tiếng Việt không phân biệt có dấu / không dấu.
+        /// </summary>
+        /// <param name="keyword">Từ khóa tìm kiếm (tối thiểu 2 ký tự)</param>
         // GET: api/products/suggest?keyword=so
         [AllowAnonymous]
         [HttpGet("suggest")]
         public async Task<IActionResult> SuggestProducts([FromQuery] string? keyword)
         {
+            // Nếu không có từ khóa hoặc từ khóa ít hơn 2 ký tự -> Trả về danh sách rỗng
             if (string.IsNullOrWhiteSpace(keyword) || keyword.Trim().Length < 2)
             {
                 return Ok(new { categories = new List<object>(), products = new List<object>() });
             }
 
-            var cleanKeyword = keyword.Trim().ToLower();
+            var cleanKeyword = keyword.Trim();
 
-            // 1. Query Categories (max 3)
+            // 1. Tìm kiếm Danh mục khớp từ khóa (Lấy tối đa 3 danh mục đang hoạt động, hỗ trợ không phân biệt dấu)
             var matchedCategories = await _context.Categories
-                .Where(c => c.IsActive && c.Name.ToLower().Contains(cleanKeyword))
+                .Where(c => c.IsActive && EF.Functions.Like(EF.Functions.Collate(c.Name, "SQL_Latin1_General_CP1_CI_AI"), $"%{cleanKeyword}%"))
                 .OrderBy(c => c.DisplayOrder)
                 .Take(3)
                 .Select(c => new
@@ -192,10 +202,10 @@ namespace FurnitureShop.API.Controllers
                 })
                 .ToListAsync();
 
-            // 2. Query Products (max 5)
+            // 2. Tìm kiếm Sản phẩm khớp từ khóa (Lấy tối đa 5 sản phẩm đang hoạt động, hỗ trợ không phân biệt dấu, sắp xếp theo ViewCount)
             var matchedProducts = await _context.Products
                 .Include(p => p.Images)
-                .Where(p => p.IsActive && p.Name.ToLower().Contains(cleanKeyword))
+                .Where(p => p.IsActive && EF.Functions.Like(EF.Functions.Collate(p.Name, "SQL_Latin1_General_CP1_CI_AI"), $"%{cleanKeyword}%"))
                 .OrderByDescending(p => p.ViewCount)
                 .Take(5)
                 .Select(p => new
