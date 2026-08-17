@@ -119,7 +119,10 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
     });
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
+});
 builder.Services.AddSignalR();
 builder.Services.AddAuthentication("Bearer")
     .AddJwtBearer("Bearer", options =>
@@ -179,6 +182,17 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles(); // Serve static files from 
 app.UseCors("AllowAll");
+
+// SINGLETON PATTERN LOGGING MIDDLEWARE: In log mỗi khi có bất kỳ HTTP Request nào
+app.Use(async (context, next) =>
+{
+    if (!context.Request.Path.Value?.Contains("swagger") ?? true)
+    {
+        FurnitureShop.API.Patterns.Singleton.LoggerService.Instance.LogInfo($"[HTTP {context.Request.Method}] {context.Request.Path} - Logger Instance ID: {FurnitureShop.API.Patterns.Singleton.LoggerService.Instance.InstanceId}");
+    }
+    await next();
+});
+
 app.UseAuthentication();  
 app.UseAuthorization();
 app.MapControllers();

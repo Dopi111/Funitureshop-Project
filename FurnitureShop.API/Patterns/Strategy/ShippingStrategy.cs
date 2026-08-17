@@ -26,7 +26,7 @@ namespace FurnitureShop.API.Patterns.Strategy
     public class LocalShippingStrategy : IShippingStrategy
     {
         private readonly ShippingMethod _method;
-        private readonly List<string> _localCities = new() { "TP.HCM", "HCM", "Ho Chi Minh" };
+        private readonly List<string> _localCities = new() { "TP.HCM", "HCM", "Ho Chi Minh", "Hồ Chí Minh", "TP. Hồ Chí Minh" };
 
         public LocalShippingStrategy(ShippingMethod method)
         {
@@ -75,8 +75,9 @@ namespace FurnitureShop.API.Patterns.Strategy
         private readonly ShippingMethod _method;
         private readonly List<string> _regionalCities = new()
         {
-            "Binh Duong", "Dong Nai", "Long An", "Ba Ria Vung Tau",
-            "Tien Giang", "Ben Tre", "Can Tho", "An Giang"
+            "Binh Duong", "Bình Dương", "Dong Nai", "Đồng Nai", "Long An",
+            "Ba Ria Vung Tau", "Bà Rịa Vũng Tàu", "Tien Giang", "Tiền Giang",
+            "Ben Tre", "Bến Tre", "Can Tho", "Cần Thơ", "An Giang"
         };
 
         public RegionalShippingStrategy(ShippingMethod method)

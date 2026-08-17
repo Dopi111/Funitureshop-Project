@@ -1,14 +1,31 @@
-﻿.env
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE & Editor files
 .vs/
 .vscode/
+**/.vs/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+
+# Build outputs
 **/bin/
 **/obj/
-**/.vs/
 node_modules/
 dist/
 dist-ssr/
+
+# Logs & Temporary files
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 patch.diff
 patch.txt
 chatbot_prompt_for_opus.md
 repo-sync/
+

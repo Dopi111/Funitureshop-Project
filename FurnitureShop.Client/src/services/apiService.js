@@ -135,6 +135,28 @@ export const apiService = {
         return response.json();
     },
 
+    async calculateShippingBest(shippingInfo, items = []) {
+        const isLocal = (shippingInfo?.city || '').toLowerCase().includes('hcm') || (shippingInfo?.city || '').toLowerCase().includes('hồ chí minh');
+        const isRegional = ['binh duong', 'dong nai', 'long an', 'can tho', 'an giang'].some(c => (shippingInfo?.city || '').toLowerCase().includes(c));
+        
+        const payload = {
+            destinationCity: shippingInfo?.city || 'TP.HCM',
+            destinationDistrict: shippingInfo?.district || 'Quan 1',
+            totalWeight: items.reduce((sum, item) => sum + (item.weight ?? 5) * item.quantity, 0) || 10,
+            totalVolume: items.reduce((sum, item) => sum + (item.volume ?? 0.2) * item.quantity, 0) || 0.5,
+            distance: isLocal ? 10 : isRegional ? 60 : 500,
+            itemCount: items.length || 1
+        };
+
+        const response = await fetch(`${API_BASE_URL}/shipping/calculate-best`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) return null;
+        return response.json();
+    },
+
     async getPriceBreakdown(data) {
         const response = await fetch(`${API_BASE_URL}/orders/price-breakdown`, {
             method: 'POST',

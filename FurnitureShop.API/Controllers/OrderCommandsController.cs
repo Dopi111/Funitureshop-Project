@@ -46,7 +46,7 @@ namespace FurnitureShop.API.Controllers
         public async Task<IActionResult> Confirm(int orderId, [FromBody] TransitionRequest? request)
         {
             var command = new ConfirmOrderCommand(_context, _orderNotifier, orderId, request?.ChangedBy);
-            var success = await _commandInvoker.ExecuteAsync(command);
+            var success = await _commandInvoker.ExecuteAsync(command, _context);
 
             if (!success)
             {
@@ -77,7 +77,7 @@ namespace FurnitureShop.API.Controllers
         public async Task<IActionResult> Ship(int orderId, [FromBody] TransitionRequest? request)
         {
             var command = new ShipOrderCommand(_context, _orderNotifier, orderId, request?.ChangedBy);
-            var success = await _commandInvoker.ExecuteAsync(command);
+            var success = await _commandInvoker.ExecuteAsync(command, _context);
 
             if (!success)
             {
@@ -108,7 +108,7 @@ namespace FurnitureShop.API.Controllers
         public async Task<IActionResult> Complete(int orderId, [FromBody] TransitionRequest? request)
         {
             var command = new CompleteOrderCommand(_context, _orderNotifier, orderId, request?.ChangedBy);
-            var success = await _commandInvoker.ExecuteAsync(command);
+            var success = await _commandInvoker.ExecuteAsync(command, _context);
 
             if (!success)
             {
@@ -139,7 +139,7 @@ namespace FurnitureShop.API.Controllers
         public async Task<IActionResult> Cancel(int orderId, [FromBody] CancelRequest? request)
         {
             var command = new CancelOrderCommand(_context, _orderNotifier, orderId, request?.Reason, request?.ChangedBy);
-            var success = await _commandInvoker.ExecuteAsync(command);
+            var success = await _commandInvoker.ExecuteAsync(command, _context);
 
             if (!success)
             {
@@ -170,7 +170,7 @@ namespace FurnitureShop.API.Controllers
         public async Task<IActionResult> MarkPaid(int orderId, [FromBody] TransitionRequest? request)
         {
             var command = new MarkAsPaidCommand(_context, orderId, request?.ChangedBy);
-            var success = await _commandInvoker.ExecuteAsync(command);
+            var success = await _commandInvoker.ExecuteAsync(command, _context);
 
             if (!success)
             {
@@ -199,7 +199,7 @@ namespace FurnitureShop.API.Controllers
                 dto.District,
                 dto.Ward);
 
-            var success = await _commandInvoker.ExecuteAsync(command);
+            var success = await _commandInvoker.ExecuteAsync(command, _context);
 
             if (!success)
             {
@@ -218,7 +218,7 @@ namespace FurnitureShop.API.Controllers
         [HttpPost("{orderId}/undo")]
         public async Task<IActionResult> Undo(int orderId)
         {
-            var success = await _commandInvoker.UndoAsync(orderId);
+            var success = await _commandInvoker.UndoAsync(orderId, _context);
             if (!success)
             {
                 return BadRequest(new { success = false, message = "No action to undo for this order" });
@@ -236,7 +236,7 @@ namespace FurnitureShop.API.Controllers
         [HttpPost("{orderId}/redo")]
         public async Task<IActionResult> Redo(int orderId)
         {
-            var success = await _commandInvoker.RedoAsync(orderId);
+            var success = await _commandInvoker.RedoAsync(orderId, _context);
             if (!success)
             {
                 return BadRequest(new { success = false, message = "No action to redo for this order" });

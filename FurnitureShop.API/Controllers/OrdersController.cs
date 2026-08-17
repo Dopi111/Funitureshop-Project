@@ -211,7 +211,7 @@ namespace FurnitureShop.API.Controllers
         {
             // COMMAND PATTERN: dùng MarkAsPaidCommand thay vì gán thỪng
             var command = new MarkAsPaidCommand(_context, id);
-            var success = await _commandInvoker.ExecuteAsync(command);
+            var success = await _commandInvoker.ExecuteAsync(command, _context);
 
             if (!success)
                 return BadRequest(new { error = "Không thể cập nhật thanh toán (có thể đã thanh toán rồi)" });
@@ -225,7 +225,7 @@ namespace FurnitureShop.API.Controllers
         public async Task<IActionResult> ConfirmOrder(int id, [FromBody] TransitionRequest? request)
         {
             var command = new ConfirmOrderCommand(_context, _orderNotifier, id, request?.ChangedBy);
-            var success = await _commandInvoker.ExecuteAsync(command);
+            var success = await _commandInvoker.ExecuteAsync(command, _context);
 
             if (!success)
                 return BadRequest(new { error = "Không thể xác nhận đơn hàng (sai trạng thái)" });
@@ -239,7 +239,7 @@ namespace FurnitureShop.API.Controllers
         public async Task<IActionResult> ShipOrder(int id, [FromBody] TransitionRequest? request)
         {
             var command = new ShipOrderCommand(_context, _orderNotifier, id, request?.ChangedBy);
-            var success = await _commandInvoker.ExecuteAsync(command);
+            var success = await _commandInvoker.ExecuteAsync(command, _context);
 
             if (!success)
                 return BadRequest(new { error = "Không thể giao hàng (sai trạng thái)" });
@@ -252,7 +252,7 @@ namespace FurnitureShop.API.Controllers
         [HttpPost("{id}/undo")]
         public async Task<IActionResult> UndoLastCommand(int id)
         {
-            var success = await _commandInvoker.UndoAsync(id);
+            var success = await _commandInvoker.UndoAsync(id, _context);
 
             if (!success)
                 return BadRequest(new { error = "Không có thao tác nào để hoàn tác" });
@@ -265,7 +265,7 @@ namespace FurnitureShop.API.Controllers
         [HttpPost("{id}/redo")]
         public async Task<IActionResult> RedoLastCommand(int id)
         {
-            var success = await _commandInvoker.RedoAsync(id);
+            var success = await _commandInvoker.RedoAsync(id, _context);
 
             if (!success)
                 return BadRequest(new { error = "Không có thao tác nào để redo" });
@@ -283,7 +283,7 @@ namespace FurnitureShop.API.Controllers
                 dto.FullName, dto.Phone, dto.Address,
                 dto.City, dto.District, dto.Ward);
 
-            var success = await _commandInvoker.ExecuteAsync(command);
+            var success = await _commandInvoker.ExecuteAsync(command, _context);
 
             if (!success)
                 return BadRequest(new { error = "Không thể cập nhật địa chỉ (trạng thái không hợp lệ)" });

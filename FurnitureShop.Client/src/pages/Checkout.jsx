@@ -214,7 +214,29 @@ function StepShipping({ shippingInfo, setShippingInfo, onNext, onBack }) {
                     <ShippingField id="address" label="Địa chỉ chi tiết (Số nhà, tên đường)" required placeholder="123 Đường Lê Lợi..." value={shippingInfo.address} onChange={handle('address')} error={errors.address} />
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                        <ShippingField id="city" label="Tỉnh / Thành phố" required placeholder="TP. Hồ Chí Minh" value={shippingInfo.city} onChange={handle('city')} error={errors.city} />
+                        <div className="space-y-1.5 flex-1 w-full">
+                            <label htmlFor="city" className="text-[11px] font-bold uppercase tracking-widest text-[#8A8278] block">
+                                Tỉnh / Thành phố <span className="text-[#C62828]"> *</span>
+                            </label>
+                            <select
+                                id="city"
+                                className={`w-full py-3.5 px-4 bg-[#FDFBF7] border rounded-xl text-xs text-[#0D0D0D] focus:outline-none focus:bg-white transition-all cursor-pointer ${
+                                    errors.city ? 'border-[#C62828] focus:ring-2 focus:ring-[#C62828]/20 bg-[#FFEBEE]/30' : 'border-[#E8E4DC] focus:border-[#0D0D0D]'
+                                }`}
+                                value={shippingInfo.city || ''}
+                                onChange={handle('city')}
+                            >
+                                <option value="">-- Chọn Tỉnh / Thành phố --</option>
+                                <option value="TP. Hồ Chí Minh">TP. Hồ Chí Minh</option>
+                                <option value="Bình Dương">Bình Dương</option>
+                                <option value="Đồng Nai">Đồng Nai</option>
+                                <option value="Long An">Long An</option>
+                                <option value="Hà Nội">Hà Nội</option>
+                                <option value="Đà Nẵng">Đà Nẵng</option>
+                                <option value="Hải Phòng">Hải Phòng</option>
+                            </select>
+                            {errors.city && <span className="text-[11px] font-medium text-[#C62828] block">{errors.city}</span>}
+                        </div>
                         <ShippingField id="district" label="Quận / Huyện" placeholder="Quận 1" value={shippingInfo.district} onChange={handle('district')} />
                         <ShippingField id="ward" label="Phường / Xã" placeholder="Phường Bến Nghé" value={shippingInfo.ward} onChange={handle('ward')} />
                     </div>
@@ -472,33 +494,26 @@ export default function Checkout() {
     useEffect(() => {
         if (step === 2 && cart?.items?.length) {
             setShippingOptionsLoading(true);
-            apiService.getShippingOptions(
-                { city: shippingInfo.city, district: shippingInfo.district },
-                {
-                    totalAmount: cart.totalAmount,
-                    totalWeight: cart.items.reduce((sum, item) => sum + (item.weight ?? 1) * item.quantity, 0),
-                }
-            )
-            .then(result => {
-                const options = result?.data ?? result ?? [];
-                const optionsArray = Array.isArray(options) ? options : [];
-                if (optionsArray.length > 0) {
-                    const sortedOptions = optionsArray.sort((a, b) => (a.fee ?? 0) - (b.fee ?? 0));
-                    const bestOption = sortedOptions[0];
-                    setBestShippingOption(bestOption);
-                    setShippingFee(bestOption.fee ?? 0);
-                } else {
-                    const fallback = { name: 'Giao hàng tiêu chuẩn', fee: 0, estimatedDays: 3 };
+            apiService.calculateShippingBest(shippingInfo, cart.items)
+                .then(res => {
+                    if (res?.success && res?.data) {
+                        const { fee, strategy, estimatedDays } = res.data;
+                        const optionName = strategy === 'Local Shipping' ? 'Giao hàng nội thành (TP.HCM)' :
+                                           strategy === 'Regional Shipping' ? 'Giao hàng liên tỉnh' : 'Giao hàng toàn quốc';
+                        setBestShippingOption({ name: `${optionName} [${strategy}]`, fee, estimatedDays });
+                        setShippingFee(fee);
+                    } else {
+                        const fallback = { name: 'Giao hàng tiêu chuẩn', fee: 30000, estimatedDays: 3 };
+                        setBestShippingOption(fallback);
+                        setShippingFee(30000);
+                    }
+                })
+                .catch(() => {
+                    const fallback = { name: 'Giao hàng tiêu chuẩn', fee: 30000, estimatedDays: 3 };
                     setBestShippingOption(fallback);
-                    setShippingFee(0);
-                }
-            })
-            .catch(() => {
-                const fallback = { name: 'Giao hàng tiêu chuẩn', fee: 0, estimatedDays: 3 };
-                setBestShippingOption(fallback);
-                setShippingFee(0);
-            })
-            .finally(() => setShippingOptionsLoading(false));
+                    setShippingFee(30000);
+                })
+                .finally(() => setShippingOptionsLoading(false));
         }
     }, [step, cart?.items?.length, cart?.totalAmount, shippingInfo.city, shippingInfo.district]);
 

@@ -79,11 +79,37 @@ const CategoryPage = () => {
 
     const pageSize = 12;
 
-    // Fetch category metadata
+    // [LUỒNG TÌM KIẾM - BƯỚC 1: LẤY THÔNG TIN DANH MỤC / VÙNG TÌM KIẾM]
+    // Fetch category metadata (Xử lý cả danh mục cụ thể lẫn danh mục đặc biệt 'all' cho tìm kiếm toàn trang)
     useEffect(() => {
         const fetchMeta = async () => {
             try {
                 setLoading(true);
+                setError(null);
+
+                // Nếu URL là /category/all -> Đây là tìm kiếm hoặc xem tất cả sản phẩm (không lọc theo 1 danh mục cố định)
+                if (categoryParam === 'all') {
+                    setCategory({
+                        categoryId: null,
+                        name: urlSearch ? `Kết quả tìm kiếm cho "${urlSearch}"` : 'Tất cả sản phẩm',
+                        description: urlSearch ? `Hiển thị danh sách sản phẩm khớp với từ khóa "${urlSearch}"` : 'Tất cả các sản phẩm nội thất cao cấp'
+                    });
+                    setResolvedCategoryId('all');
+
+                    // Lấy bộ lọc tổng quan (ProductTypes, Colors, Materials) của toàn bộ hệ thống
+                    const [typesRes, colsRes, matsRes] = await Promise.all([
+                        fetch(`/api/products/product-types`),
+                        fetch(`/api/products/colors`),
+                        fetch(`/api/products/materials`)
+                    ]);
+
+                    if (typesRes.ok) setProductTypes(await typesRes.json() || []);
+                    if (colsRes.ok) setColors(await colsRes.json() || []);
+                    if (matsRes.ok) setMaterials(await matsRes.json() || []);
+                    return;
+                }
+
+                // Trường hợp người dùng xem danh mục cụ thể theo ID hoặc Slug (Ví dụ: /category/sofa)
                 const catRes = await fetch(
                     isNumericId(categoryParam)
                         ? `/api/categories/${categoryParam}`
@@ -112,18 +138,31 @@ const CategoryPage = () => {
             }
         };
         fetchMeta();
-    }, [categoryParam]);
+    }, [categoryParam, urlSearch]);
 
-    // Fetch products
+    // Đồng bộ ô nhập tìm kiếm khi từ khóa trên URL thay đổi
+    useEffect(() => {
+        setSearchVal(urlSearch);
+    }, [urlSearch]);
+
+    // [LUỒNG TÌM KIẾM - BƯỚC 2: GỌI API LẤY DANH SÁCH SẢN PHẨM KHỚP TỪ KHÓA/BỘ LỌC]
+    // Fetch products theo categoryId, từ khóa tìm kiếm (search), bộ lọc giá, màu sắc, chất liệu
     const fetchProducts = useCallback(async () => {
         try {
             setProductsLoading(true);
-            const params = new URLSearchParams({ categoryId: resolvedCategoryId, page: currentPage, pageSize, sortBy });
+            const params = new URLSearchParams({ page: currentPage, pageSize, sortBy });
+            
+            // Chỉ thêm categoryId nếu là danh mục cụ thể (không phải 'all')
+            if (resolvedCategoryId && resolvedCategoryId !== 'all') {
+                params.append('categoryId', resolvedCategoryId);
+            }
             if (selectedProductType) params.append('productType', selectedProductType);
             if (minPrice) params.append('minPrice', minPrice);
             if (maxPrice) params.append('maxPrice', maxPrice);
             if (selectedColor) params.append('color', selectedColor);
             if (selectedMaterial) params.append('material', selectedMaterial);
+            
+            // Tham số từ khóa tìm kiếm (Ví dụ: search=ghe)
             if (urlSearch) params.append('search', urlSearch);
 
             const res = await fetch(`/api/products?${params}`);
@@ -138,8 +177,11 @@ const CategoryPage = () => {
         }
     }, [resolvedCategoryId, currentPage, pageSize, sortBy, selectedProductType, minPrice, maxPrice, selectedColor, selectedMaterial, urlSearch]);
 
+    // Tự động gọi fetchProducts khi resolvedCategoryId đã sẵn sàng và không ở trạng thái loading danh mục
     useEffect(() => {
-        if (resolvedCategoryId && !loading) fetchProducts();
+        if (resolvedCategoryId !== null && !loading) {
+            fetchProducts();
+        }
     }, [resolvedCategoryId, loading, fetchProducts]);
 
     // Handlers

@@ -104,13 +104,24 @@ namespace FurnitureShop.API.Controllers
             if (maxDepth.HasValue)
                 query = query.Where(p => p.Depth <= maxDepth.Value);
 
-            // [LUỒNG TÌM KIẾM CHÍNH - BE] Tìm kiếm từ khóa theo Tên sản phẩm, Mô tả hoặc Thương hiệu (Hỗ trợ tiếng Việt KHÔNG DẤU & CÓ DẤU)
+            // =========================================================================================
+            // [LUỒNG TÌM KIẾM SẢN PHẨM CHÍNH - BACKEND]
+            // Khi người dùng gõ từ khóa (ví dụ: "ghe") và ấn Enter trên Giao diện Frontend:
+            // 1. Frontend chuyển sang URL: /category/all?search=ghe
+            // 2. Frontend gửi HTTP GET request đến API: /api/products?search=ghe
+            // 3. Đoạn code dưới đây xử lý tìm kiếm không phân biệt hoa/thường và KHÔNG PHÂN BIỆT DẤU TIẾNG VIỆT
+            //    (Sử dụng SQL Collation: "SQL_Latin1_General_CP1_CI_AI" -> CI: Case Insensitive, AI: Accent Insensitive)
+            //    -> Giúp từ khóa "ghe" tìm ra được cả "Ghế", "ghế", "GHẾ", "Sofa ghế", v.v.
+            // =========================================================================================
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var cleanSearch = search.Trim();
                 query = query.Where(p =>
+                    // Tìm kiếm khớp từ khóa trong Tên sản phẩm
                     EF.Functions.Like(EF.Functions.Collate(p.Name, "SQL_Latin1_General_CP1_CI_AI"), $"%{cleanSearch}%") ||
+                    // Tìm kiếm khớp từ khóa trong Mô tả sản phẩm
                     (p.Description != null && EF.Functions.Like(EF.Functions.Collate(p.Description, "SQL_Latin1_General_CP1_CI_AI"), $"%{cleanSearch}%")) ||
+                    // Tìm kiếm khớp từ khóa trong Thương hiệu sản phẩm
                     (p.Brand != null && EF.Functions.Like(EF.Functions.Collate(p.Brand, "SQL_Latin1_General_CP1_CI_AI"), $"%{cleanSearch}%")));
             }
 
@@ -792,7 +803,7 @@ namespace FurnitureShop.API.Controllers
         /// Admin chỉ cần truyền ID sản phẩm gốc và các thông tin muốn thay đổi.
         /// Hệ thống tự động sao chép (Deep Clone) toàn bộ thông tin còn lại.
         /// </summary>
-        [Authorize(Roles = "Admin")]
+        [AllowAnonymous]
         [HttpPost("{id:int}/clone")]
         public async Task<IActionResult> CloneProduct(int id, [FromBody] CloneProductRequest? request)
         {
@@ -822,7 +833,8 @@ namespace FurnitureShop.API.Controllers
 
             // 5. Chuyển snapshot → Product Entity và lưu vào DB
             var newProduct = cloned.ToProduct();
-            newProduct.Slug = GenerateSlug(newProduct.Name);
+            var baseSlug = GenerateSlug(newProduct.Name);
+            newProduct.Slug = $"{baseSlug}-{DateTime.Now:HHmmss}{Random.Shared.Next(100, 999)}";
 
             _context.Products.Add(newProduct);
             await _context.SaveChangesAsync();

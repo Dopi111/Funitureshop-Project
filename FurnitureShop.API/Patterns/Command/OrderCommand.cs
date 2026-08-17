@@ -13,8 +13,8 @@ namespace FurnitureShop.API.Patterns.Command
     {
         int OrderId { get; }
         string CommandName { get; }
-        Task<bool> ExecuteAsync();
-        Task<bool> UndoAsync();
+        Task<bool> ExecuteAsync(AppDbContext? context = null);
+        Task<bool> UndoAsync(AppDbContext? context = null);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -39,9 +39,10 @@ namespace FurnitureShop.API.Patterns.Command
             _changedBy = changedBy;
         }
 
-        public async Task<bool> ExecuteAsync()
+        public async Task<bool> ExecuteAsync(AppDbContext? context = null)
         {
-            var order = await LoadOrderAsync();
+            var db = context ?? _context;
+            var order = await LoadOrderAsync(db);
             if (order == null || order.Status != OrderStatus.Pending) return false;
 
             var oldStatus = order.Status;
@@ -58,16 +59,17 @@ namespace FurnitureShop.API.Patterns.Command
                 ChangedBy = _changedBy ?? "System"
             });
 
-            await _context.SaveChangesAsync();
+            await db.SaveChangesAsync();
             await _notifier.NotifyAsync(order, oldStatus, order.Status);
 
             Console.WriteLine($"[Command] ✅ ConfirmOrder #{order.OrderNumber}: Pending → Processing");
             return true;
         }
 
-        public async Task<bool> UndoAsync()
+        public async Task<bool> UndoAsync(AppDbContext? context = null)
         {
-            var order = await LoadOrderAsync();
+            var db = context ?? _context;
+            var order = await LoadOrderAsync(db);
             if (order == null || order.Status != OrderStatus.Processing) return false;
 
             var oldStatus = order.Status;
@@ -84,14 +86,13 @@ namespace FurnitureShop.API.Patterns.Command
                 ChangedBy = _changedBy ?? "System"
             });
 
-            await _context.SaveChangesAsync();
+            await db.SaveChangesAsync();
             Console.WriteLine($"[Command] ↩️  Undo ConfirmOrder #{order.OrderNumber}: Processing → Pending");
             return true;
         }
 
-        private Task<Order?> LoadOrderAsync() =>
-            _context.Orders
-                .Include(o => o.User)
+        private Task<Order?> LoadOrderAsync(AppDbContext db) =>
+            db.Orders
                 .Include(o => o.OrderDetails)
                 .Include(o => o.StatusHistories)
                 .FirstOrDefaultAsync(o => o.OrderId == _orderId);
@@ -119,9 +120,10 @@ namespace FurnitureShop.API.Patterns.Command
             _changedBy = changedBy;
         }
 
-        public async Task<bool> ExecuteAsync()
+        public async Task<bool> ExecuteAsync(AppDbContext? context = null)
         {
-            var order = await LoadOrderAsync();
+            var db = context ?? _context;
+            var order = await LoadOrderAsync(db);
             if (order == null || order.Status != OrderStatus.Processing) return false;
 
             var oldStatus = order.Status;
@@ -138,16 +140,17 @@ namespace FurnitureShop.API.Patterns.Command
                 ChangedBy = _changedBy ?? "System"
             });
 
-            await _context.SaveChangesAsync();
+            await db.SaveChangesAsync();
             await _notifier.NotifyAsync(order, oldStatus, order.Status);
 
             Console.WriteLine($"[Command] 🚚 ShipOrder #{order.OrderNumber}: Processing → Shipped");
             return true;
         }
 
-        public async Task<bool> UndoAsync()
+        public async Task<bool> UndoAsync(AppDbContext? context = null)
         {
-            var order = await LoadOrderAsync();
+            var db = context ?? _context;
+            var order = await LoadOrderAsync(db);
             if (order == null || order.Status != OrderStatus.Shipped) return false;
 
             var oldStatus = order.Status;
@@ -164,14 +167,13 @@ namespace FurnitureShop.API.Patterns.Command
                 ChangedBy = _changedBy ?? "System"
             });
 
-            await _context.SaveChangesAsync();
+            await db.SaveChangesAsync();
             Console.WriteLine($"[Command] ↩️  Undo ShipOrder #{order.OrderNumber}: Shipped → Processing");
             return true;
         }
 
-        private Task<Order?> LoadOrderAsync() =>
-            _context.Orders
-                .Include(o => o.User)
+        private Task<Order?> LoadOrderAsync(AppDbContext db) =>
+            db.Orders
                 .Include(o => o.OrderDetails)
                 .Include(o => o.StatusHistories)
                 .FirstOrDefaultAsync(o => o.OrderId == _orderId);
@@ -202,9 +204,10 @@ namespace FurnitureShop.API.Patterns.Command
             _changedBy = changedBy;
         }
 
-        public async Task<bool> ExecuteAsync()
+        public async Task<bool> ExecuteAsync(AppDbContext? context = null)
         {
-            var order = await LoadOrderAsync();
+            var db = context ?? _context;
+            var order = await LoadOrderAsync(db);
             if (order == null) return false;
 
             // Chỉ cho hủy khi Pending hoặc Processing
@@ -225,16 +228,17 @@ namespace FurnitureShop.API.Patterns.Command
                 ChangedBy = _changedBy ?? "System"
             });
 
-            await _context.SaveChangesAsync();
+            await db.SaveChangesAsync();
             await _notifier.NotifyAsync(order, _previousStatus, order.Status);
 
             Console.WriteLine($"[Command] ❌ CancelOrder #{order.OrderNumber}: {_previousStatus} → Cancelled");
             return true;
         }
 
-        public async Task<bool> UndoAsync()
+        public async Task<bool> UndoAsync(AppDbContext? context = null)
         {
-            var order = await LoadOrderAsync();
+            var db = context ?? _context;
+            var order = await LoadOrderAsync(db);
             if (order == null || order.Status != OrderStatus.Cancelled) return false;
 
             order.Status = _previousStatus;
@@ -254,14 +258,13 @@ namespace FurnitureShop.API.Patterns.Command
                 ChangedBy = _changedBy ?? "System"
             });
 
-            await _context.SaveChangesAsync();
+            await db.SaveChangesAsync();
             Console.WriteLine($"[Command] ↩️  Undo CancelOrder #{order.OrderNumber}: Cancelled → {_previousStatus}");
             return true;
         }
 
-        private Task<Order?> LoadOrderAsync() =>
-            _context.Orders
-                .Include(o => o.User)
+        private Task<Order?> LoadOrderAsync(AppDbContext db) =>
+            db.Orders
                 .Include(o => o.OrderDetails)
                 .Include(o => o.StatusHistories)
                 .FirstOrDefaultAsync(o => o.OrderId == _orderId);
@@ -289,9 +292,10 @@ namespace FurnitureShop.API.Patterns.Command
             _changedBy = changedBy;
         }
 
-        public async Task<bool> ExecuteAsync()
+        public async Task<bool> ExecuteAsync(AppDbContext? context = null)
         {
-            var order = await LoadOrderAsync();
+            var db = context ?? _context;
+            var order = await LoadOrderAsync(db);
             if (order == null || order.Status != OrderStatus.Shipped) return false;
 
             var oldStatus = order.Status;
@@ -314,16 +318,17 @@ namespace FurnitureShop.API.Patterns.Command
                 ChangedBy = _changedBy ?? "System"
             });
 
-            await _context.SaveChangesAsync();
+            await db.SaveChangesAsync();
             await _notifier.NotifyAsync(order, oldStatus, order.Status);
 
             Console.WriteLine($"[Command] ✅ CompleteOrder #{order.OrderNumber}: Shipped → Completed");
             return true;
         }
 
-        public async Task<bool> UndoAsync()
+        public async Task<bool> UndoAsync(AppDbContext? context = null)
         {
-            var order = await LoadOrderAsync();
+            var db = context ?? _context;
+            var order = await LoadOrderAsync(db);
             if (order == null || order.Status != OrderStatus.Completed) return false;
 
             var oldStatus = order.Status;
@@ -339,14 +344,13 @@ namespace FurnitureShop.API.Patterns.Command
                 ChangedBy = _changedBy ?? "System"
             });
 
-            await _context.SaveChangesAsync();
+            await db.SaveChangesAsync();
             Console.WriteLine($"[Command] ↩️  Undo CompleteOrder #{order.OrderNumber}: Completed → Shipped");
             return true;
         }
 
-        private Task<Order?> LoadOrderAsync() =>
-            _context.Orders
-                .Include(o => o.User)
+        private Task<Order?> LoadOrderAsync(AppDbContext db) =>
+            db.Orders
                 .Include(o => o.OrderDetails)
                 .Include(o => o.StatusHistories)
                 .FirstOrDefaultAsync(o => o.OrderId == _orderId);
@@ -373,23 +377,25 @@ namespace FurnitureShop.API.Patterns.Command
             _changedBy = changedBy;
         }
 
-        public async Task<bool> ExecuteAsync()
+        public async Task<bool> ExecuteAsync(AppDbContext? context = null)
         {
-            var order = await _context.Orders.FindAsync(_orderId);
+            var db = context ?? _context;
+            var order = await db.Orders.FindAsync(_orderId);
             if (order == null || order.IsPaid) return false;
 
             order.IsPaid = true;
             order.PaidAt = DateTime.UtcNow;
             order.UpdatedAt = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await db.SaveChangesAsync();
             Console.WriteLine($"[Command] 💰 MarkAsPaid #{order.OrderNumber} lúc {order.PaidAt:HH:mm dd/MM/yyyy}");
             return true;
         }
 
-        public async Task<bool> UndoAsync()
+        public async Task<bool> UndoAsync(AppDbContext? context = null)
         {
-            var order = await _context.Orders.FindAsync(_orderId);
+            var db = context ?? _context;
+            var order = await db.Orders.FindAsync(_orderId);
             if (order == null || !order.IsPaid) return false;
 
             _previousPaidAt = order.PaidAt;
@@ -397,7 +403,7 @@ namespace FurnitureShop.API.Patterns.Command
             order.PaidAt = null;
             order.UpdatedAt = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await db.SaveChangesAsync();
             Console.WriteLine($"[Command] ↩️  Undo MarkAsPaid #{order.OrderNumber}");
             return true;
         }
@@ -445,9 +451,10 @@ namespace FurnitureShop.API.Patterns.Command
             _newWard = ward;
         }
 
-        public async Task<bool> ExecuteAsync()
+        public async Task<bool> ExecuteAsync(AppDbContext? context = null)
         {
-            var order = await _context.Orders.FindAsync(_orderId);
+            var db = context ?? _context;
+            var order = await db.Orders.FindAsync(_orderId);
             if (order == null) return false;
 
             // Chỉ cho cập nhật khi chưa giao
@@ -472,14 +479,15 @@ namespace FurnitureShop.API.Patterns.Command
             order.ShippingWard      = _newWard;
             order.UpdatedAt         = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await db.SaveChangesAsync();
             Console.WriteLine($"[Command] 📦 UpdateShippingAddress #{order.OrderNumber}: {_newAddress}, {_newCity}");
             return true;
         }
 
-        public async Task<bool> UndoAsync()
+        public async Task<bool> UndoAsync(AppDbContext? context = null)
         {
-            var order = await _context.Orders.FindAsync(_orderId);
+            var db = context ?? _context;
+            var order = await db.Orders.FindAsync(_orderId);
             if (order == null) return false;
 
             order.ShippingFullName  = _oldFullName;
@@ -490,7 +498,7 @@ namespace FurnitureShop.API.Patterns.Command
             order.ShippingWard      = _oldWard;
             order.UpdatedAt         = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await db.SaveChangesAsync();
             Console.WriteLine($"[Command] ↩️  Undo UpdateShippingAddress #{order.OrderNumber}: restored to {_oldAddress}, {_oldCity}");
             return true;
         }
@@ -539,9 +547,9 @@ namespace FurnitureShop.API.Patterns.Command
         }
 
         // Thực thi command và đẩy vào undo stack
-        public async Task<bool> ExecuteAsync(IOrderCommand command)
+        public async Task<bool> ExecuteAsync(IOrderCommand command, AppDbContext? context = null)
         {
-            var success = await command.ExecuteAsync();
+            var success = await command.ExecuteAsync(context);
             if (success)
             {
                 var undoStack = GetUndoStack(command.OrderId);
@@ -564,7 +572,7 @@ namespace FurnitureShop.API.Patterns.Command
         }
 
         // Undo command gần nhất
-        public async Task<bool> UndoAsync(int orderId)
+        public async Task<bool> UndoAsync(int orderId, AppDbContext? context = null)
         {
             var undoStack = GetUndoStack(orderId);
             var redoStack = GetRedoStack(orderId);
@@ -577,7 +585,7 @@ namespace FurnitureShop.API.Patterns.Command
             }
 
             var command = undoStack.Pop();
-            var success = await command.UndoAsync();
+            var success = await command.UndoAsync(context);
             if (success)
             {
                 redoStack.Push(command);
@@ -594,7 +602,7 @@ namespace FurnitureShop.API.Patterns.Command
         }
 
         // Redo command vừa undo
-        public async Task<bool> RedoAsync(int orderId)
+        public async Task<bool> RedoAsync(int orderId, AppDbContext? context = null)
         {
             var undoStack = GetUndoStack(orderId);
             var redoStack = GetRedoStack(orderId);
@@ -607,7 +615,7 @@ namespace FurnitureShop.API.Patterns.Command
             }
 
             var command = redoStack.Pop();
-            var success = await command.ExecuteAsync();
+            var success = await command.ExecuteAsync(context);
             if (success)
             {
                 undoStack.Push(command);

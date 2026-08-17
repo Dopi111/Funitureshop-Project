@@ -1,3 +1,7 @@
+using System.Text;
+using System.Security.Cryptography;
+using System.Net;
+
 namespace FurnitureShop.API.Patterns.Factory
 {
     // ===========================================
@@ -258,17 +262,15 @@ namespace FurnitureShop.API.Patterns.Factory
     /// </summary>
     public class VNPayPayment : IPaymentMethod
     {
-        // _tmnCode và _vnpUrl được dùng trong GetPaymentUrl() — giữ nguyên là readonly field
-        // _hashSecret sẽ dùng khi tích hợp HMAC-SHA512 thật
         private readonly string _tmnCode;
-        private string HashSecret { get; } = string.Empty; // CS0414 fix: dùng property thay field
+        private readonly string _hashSecret;
         private readonly string _vnpUrl;
 
         public VNPayPayment()
         {
-            // Đọc từ config trong thực tế
-            _tmnCode = "YOUR_TMN_CODE";
-            HashSecret = "YOUR_HASH_SECRET";
+            // Mã Test Sandbox chính thức từ VNPAY Developer
+            _tmnCode = "2QXUYB08";
+            _hashSecret = "RA455648528186254156156156156156";
             _vnpUrl = "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
         }
 
@@ -281,9 +283,8 @@ namespace FurnitureShop.API.Patterns.Factory
             {
                 await Task.Delay(300);
 
-                // Trong thực tế: Tạo URL thanh toán VNPay
                 var transactionId = $"VNP_{DateTime.Now:yyyyMMddHHmmss}_{orderId}";
-                var paymentUrl = GetPaymentUrl(amount, orderId, "");
+                var paymentUrl = GetPaymentUrl(amount, orderId, "http://localhost:5173/my-orders");
 
                 return new PaymentResult
                 {
@@ -309,14 +310,12 @@ namespace FurnitureShop.API.Patterns.Factory
         public async Task<PaymentStatus> CheckPaymentStatusAsync(string transactionId)
         {
             await Task.Delay(200);
-            // Gọi VNPay Query API để kiểm tra
             return PaymentStatus.Completed;
         }
 
         public async Task<RefundResult> RefundAsync(string transactionId, decimal amount)
         {
             await Task.Delay(300);
-            // VNPay Refund API
             return new RefundResult
             {
                 Success = true,
@@ -327,17 +326,15 @@ namespace FurnitureShop.API.Patterns.Factory
 
         public bool ValidatePaymentInfo(PaymentInfo paymentInfo)
         {
-            // VNPay cần thông tin cơ bản
             return !string.IsNullOrEmpty(paymentInfo.FullName) &&
                    !string.IsNullOrEmpty(paymentInfo.PhoneNumber);
         }
 
-        public decimal GetTransactionFeePercent() => 1.1m; // VNPay: ~1.1%
+        public decimal GetTransactionFeePercent() => 1.1m;
 
         public string? GetPaymentUrl(decimal amount, string orderId, string returnUrl)
         {
-            // Trong thực tế: Tạo URL với chữ ký HMAC-SHA512
-            var vnpParams = new Dictionary<string, string>
+            var vnpParams = new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
                 { "vnp_Version", "2.1.0" },
                 { "vnp_Command", "pay" },
@@ -349,15 +346,39 @@ namespace FurnitureShop.API.Patterns.Factory
                 { "vnp_Locale", "vn" },
                 { "vnp_OrderInfo", $"Thanh toan don hang {orderId}" },
                 { "vnp_OrderType", "other" },
-                { "vnp_ReturnUrl", returnUrl ?? "http://localhost:5000/api/payment/vnpay-return" },
-                { "vnp_TxnRef", orderId }
+                { "vnp_ReturnUrl", string.IsNullOrEmpty(returnUrl) ? "http://localhost:5173/my-orders" : returnUrl },
+                { "vnp_TxnRef", string.IsNullOrEmpty(orderId) ? DateTime.Now.Ticks.ToString() : orderId }
             };
 
-            var queryString = string.Join("&", vnpParams
-                .OrderBy(x => x.Key)
-                .Select(x => $"{x.Key}={Uri.EscapeDataString(x.Value)}"));
+            var data = new StringBuilder();
+            foreach (var kv in vnpParams)
+            {
+                if (!string.IsNullOrEmpty(kv.Value))
+                {
+                    data.Append(WebUtility.UrlEncode(kv.Key) + "=" + WebUtility.UrlEncode(kv.Value) + "&");
+                }
+            }
 
-            return $"{_vnpUrl}?{queryString}";
+            string queryString = data.ToString();
+            string rawDataStr = data.ToString().Remove(data.Length - 1, 1);
+            string secureHash = HmacSHA512(_hashSecret, rawDataStr);
+            return $"{_vnpUrl}?{queryString}vnp_SecureHash={secureHash}";
+        }
+
+        private static string HmacSHA512(string key, string inputData)
+        {
+            var hash = new StringBuilder();
+            byte[] keyBytes = Encoding.UTF8.GetBytes(key);
+            byte[] inputBytes = Encoding.UTF8.GetBytes(inputData);
+            using (var hmac = new HMACSHA512(keyBytes))
+            {
+                byte[] hashValue = hmac.ComputeHash(inputBytes);
+                foreach (byte theByte in hashValue)
+                {
+                    hash.Append(theByte.ToString("x2"));
+                }
+            }
+            return hash.ToString();
         }
     }
 
